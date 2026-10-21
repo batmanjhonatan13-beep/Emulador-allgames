@@ -1,0 +1,55 @@
+# AllGames em Docker. Uso: cd docker && docker compose up -d --build
+# (ou rode scripts/instalar-docker.sh, que prepara tudo).
+#
+# As opções de segurança e dispositivos são as que o steam-headless 2.x pede
+# para rodar com systemd sem modo privilegiado.
+services:
+  allgames:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: allgames:latest
+    container_name: allgames
+    hostname: ${NOME:-allgames}
+    restart: unless-stopped
+    # Rede do host: o Moonlight acha o PC sozinho e não é preciso mapear portas.
+    network_mode: host
+    tty: true
+    shm_size: 2g
+    pids_limit: 8192
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
+    cgroup: private
+    security_opt:
+      - writable-cgroups=true
+      - seccomp=unconfined
+      - systempaths=unconfined
+    cap_add: [SYS_ADMIN, SYS_PTRACE, NET_ADMIN, DAC_READ_SEARCH, SYS_NICE]
+    device_cgroup_rules:
+      - "c 13:* rwm"
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+      - /dev/input:rw,dev,mode=0755
+    devices:
+      - ${GPU:-/dev/dri/renderD128}:/dev/dri/renderD128
+      - /dev/fuse
+      - /dev/uinput
+      - /dev/uhid
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      STEAM_HEADLESS_SESSION_MODE: ${MODO:-desktop}
+      ENABLE_STEAM_SYSTEMD_SERVICE: "true"
+    volumes:
+      # Home do container: emuladores, Heroic, saves dos emuladores, configurações.
+      - ${DADOS}/home:/home/steamheadless
+      - ${DADOS}/estado:/var/lib/steam-headless
+      - ${DADOS}/journal:/var/log/journal
+      # Jogos da Steam e da Epic (escolha o disco com mais espaço).
+      - ${JOGOS}:/mnt/games
+      # Suas ROMs, no formato do ArkOS/R36S (uma pasta por console, BIOS em bios/).
+      - ${ROMS}:/roms
+      - /etc/localtime:/run/host-localtime:ro
+      - /sys/devices/virtual/input:/sys/devices/virtual/input

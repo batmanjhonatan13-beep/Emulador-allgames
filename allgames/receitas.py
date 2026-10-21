@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import caminhos
+from . import caminhos, supervisor
 from .catalogo import Jogo, verificar
 
 
@@ -70,14 +70,20 @@ def jogar(jogo: Jogo, gamescope: bool = False) -> None:
     os.execvpe(argv[0], argv, env)
 
 
-def jogar_comando(jogo: Jogo, argv: list[str], gamescope: bool = False) -> None:
-    """Como `jogar`, para jogos abertos direto por um comando (ROMs no emulador)."""
+def jogar_comando(jogo: Jogo, argv: list[str], gamescope: bool = False, combo_sair: bool = False) -> int:
+    """Como `jogar`, para jogos abertos direto por um comando (ROMs, ports).
+
+    Com `combo_sair`, o AllGames fica rodando junto para fechar o jogo quando
+    Select+Start for segurado; sem ele, o processo vira o próprio jogo.
+    """
     env = dict(os.environ)
     argv = _com_gamescope(argv, env, gamescope)
     if not shutil.which(argv[0]):
         raise RuntimeError(f"{argv[0]} não está instalado no PC")
     log = os.open(arquivo_log(jogo), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
     os.write(log, f"\n$ {shlex.join(argv)}\n".encode())
+    if combo_sair:
+        return supervisor.rodar(argv, env=env, log=log)
     os.dup2(log, 1)
     os.dup2(log, 2)
     os.execvpe(argv[0], argv, env)

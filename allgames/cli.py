@@ -2,10 +2,25 @@
 
 import argparse
 import shutil
+import subprocess
 import sys
+import time
 from datetime import datetime
 
-from . import biblioteca, caminhos, capas, catalogo, doutor, lojas, portal, receitas, saves, sistemas, sunshine
+from . import (
+    biblioteca,
+    caminhos,
+    capas,
+    catalogo,
+    doutor,
+    lojas,
+    portal,
+    portmaster,
+    receitas,
+    saves,
+    sistemas,
+    sunshine,
+)
 
 
 def cmd_listar(jogos: list[catalogo.Jogo], args) -> int:
@@ -80,7 +95,7 @@ def cmd_jogar(jogos: list[catalogo.Jogo], args) -> int:
         dica = jogo.extra.get("falta") or f"rode: allgames instalar {jogo.id}"
         print(f"{jogo.nome} ainda não está pronto: {dica}", file=sys.stderr)
         return 1
-    argv = sistemas.comando(jogo) if jogo.origem == "rom" else None
+    argv = {"rom": sistemas.comando, "portmaster": portmaster.comando}.get(jogo.origem, lambda _: None)(jogo)
     if argv and not shutil.which(argv[0]):
         raise RuntimeError(f"{argv[0]} não está instalado no PC")
     # Guarda os saves da partida anterior antes de abrir o jogo de novo.
@@ -88,7 +103,7 @@ def cmd_jogar(jogos: list[catalogo.Jogo], args) -> int:
     jogo.pasta.mkdir(parents=True, exist_ok=True)
     (jogo.pasta / ".jogado").touch()
     if argv:
-        receitas.jogar_comando(jogo, argv, gamescope=args.gamescope)
+        return receitas.jogar_comando(jogo, argv, args.gamescope, jogo.extra.get("combo_sair", False))
     elif jogo.origem in ("steam", "heroic"):
         return lojas.jogar(jogo)
     else:
@@ -148,7 +163,7 @@ def cmd_emuladores(jogos, args) -> int:
     dados = sistemas.carregar()
     emuladores, lista = dados
     if args.acao == "instalar":
-        avisos = sistemas.instalar(args.alvos, dados)
+        avisos = sistemas.instalar(args.alvos, dados, todos=args.todos)
         for aviso in avisos:
             print(f"! {aviso}")
         print("✔ Pronto. As ROMs desses sistemas já podem ser abertas pelo portal.")
@@ -174,6 +189,54 @@ def cmd_lojas(jogos, args) -> int:
         if args.detalhes:
             for jogo in lista:
                 print(f"  {'✔' if jogo.instalado else ' '} {jogo.nome}  ({jogo.id})")
+    return 0
+
+
+def cmd_preparar(jogos, args) -> int:
+    """Deixa tudo pronto para clicar e jogar (é o que o Docker roda ao ligar)."""
+    print(time.strftime("== %d/%m/%Y %H:%M:%S: preparando o AllGames"))
+    dados = sistemas.carregar()
+    criadas = sistemas.preparar_pastas(dados)
+    if criadas:
+        print(f"Pastas de ROMs criadas em {sistemas.roms_dir()}")
+    if portmaster.instalado():
+        portmaster.preparar_ambiente()
+        print("PortMaster pronto")
+    avisos = [] if args.sem_emuladores else sistemas.instalar([], dados, todos=True)
+    if args.lojas:
+        for app, nome in (("com.heroicgameslauncher.hgl", "Heroic"),):
+            try:
+                sistemas.instalar_flatpak(app)
+                print(f"{nome} pronto")
+            except (RuntimeError, OSError, subprocess.CalledProcessError) as erro:
+                avisos.append(f"{nome}: falhou ({erro})")
+    for aviso in avisos:
+        print(f"! {aviso}")
+    print("== pronto")
+    return 0
+
+
+def cmd_portmaster(jogos, args) -> int:
+    if args.acao == "instalar":
+        for nome in args.ports:
+            portmaster.instalar(nome if nome.endswith(".zip") else f"{nome}.zip")
+        return 0
+    if args.acao == "desinstalar":
+        for nome in args.ports:
+            portmaster.desinstalar(nome if nome.endswith(".zip") else f"{nome}.zip")
+        return 0
+    if not portmaster.instalado():
+        print(
+            f"O PortMaster não está instalado em {portmaster.pasta_ferramentas()}: rode scripts/instalar-portmaster.sh"
+        )
+        return 1
+    termo = " ".join(args.ports).lower()
+    lista = [j for j in portmaster.jogos() if termo in j.nome.lower()]
+    for jogo in lista:
+        marca = "✔" if jogo.instalado else " "
+        aviso = "  (precisa dos arquivos do jogo)" if jogo.extra.get("aviso") else ""
+        print(f"{marca} {jogo.extra['nome_zip']:<32} {jogo.nome}{aviso}")
+    print(f"\n{len(lista)} ports que rodam neste PC. Instale com: allgames portmaster instalar NOME")
     return 0
 
 
@@ -277,11 +340,22 @@ def montar_parser() -> argparse.ArgumentParser:
         "acao", nargs="?", choices=["instalar"], help="instalar: sem alvos, instala o que as suas ROMs pedem"
     )
     p.add_argument("alvos", nargs="*", metavar="SISTEMA_OU_EMULADOR")
+    p.add_argument("--todos", action="store_true", help="instala os emuladores de todos os consoles")
     p.set_defaults(func=cmd_emuladores)
 
     p = sub.add_parser("lojas", help="jogos da Steam e do Heroic (Epic, GOG, Amazon)")
     p.add_argument("--detalhes", action="store_true", help="lista os jogos")
     p.set_defaults(func=cmd_lojas)
+
+    p = sub.add_parser("preparar", help="instala emuladores e deixa tudo pronto (usado pelo Docker ao ligar)")
+    p.add_argument("--lojas", action="store_true", help="instala também o Heroic (Epic, GOG, Amazon)")
+    p.add_argument("--sem-emuladores", action="store_true")
+    p.set_defaults(func=cmd_preparar)
+
+    p = sub.add_parser("portmaster", help="pesquisa, instala e desinstala ports do PortMaster")
+    p.add_argument("acao", nargs="?", choices=["buscar", "instalar", "desinstalar"], default="buscar")
+    p.add_argument("ports", nargs="*", metavar="PORT_OU_BUSCA")
+    p.set_defaults(func=cmd_portmaster)
 
     p = sub.add_parser("portal", help="tela com as capas dos jogos, estilo Game Pass")
     p.add_argument("--kiosk", action="store_true", help="abre o navegador em tela cheia (é o que o Sunshine usa)")

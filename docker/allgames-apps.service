@@ -1,0 +1,12 @@
+[Unit]
+Description=AllGames: publica o portal e os jogos no Sunshine
+Before=steam-headless-sunshine.service
+
+[Service]
+Type=oneshot
+User=steamheadless
+Environment=HOME=/home/steamheadless
+ExecStart=/usr/local/bin/allgames sincronizar --sem-reiniciar
+
+[Install]
+WantedBy=steam-headless.target

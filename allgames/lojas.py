@@ -122,29 +122,36 @@ def steam_comando() -> list[str] | None:
     return None
 
 
-def steam_instalados() -> dict[str, str]:
-    """appid -> nome dos jogos instalados, em todas as bibliotecas da Steam."""
+def steam_bibliotecas() -> list[Path]:
+    """Pastas "steamapps" de todas as bibliotecas da Steam (inclusive outros discos)."""
     raiz = steam_raiz()
     if not raiz:
-        return {}
+        return []
     bibliotecas = [raiz / "steamapps"]
     try:
         pastas = _vdf((raiz / "steamapps/libraryfolders.vdf").read_text(errors="replace")).get("libraryfolders", {})
         bibliotecas += [Path(p["path"]) / "steamapps" for p in pastas.values() if isinstance(p, dict) and "path" in p]
     except OSError:
         pass
-    jogos = {}
-    for biblioteca in dict.fromkeys(bibliotecas):
+    return [b for b in dict.fromkeys(bibliotecas) if b.is_dir()]
+
+
+def steam_manifestos():
+    """(pasta steamapps, AppState) de cada jogo que a Steam conhece, menos as ferramentas."""
+    for biblioteca in steam_bibliotecas():
         for manifesto in biblioteca.glob("appmanifest_*.acf"):
             try:
                 app = _vdf(manifesto.read_text(errors="replace")).get("AppState", {})
             except OSError:
                 continue
-            nome = app.get("name", "")
-            # StateFlags 4 = totalmente instalado
-            if app.get("appid") and nome and not _STEAM_FERRAMENTAS.search(nome) and int(app.get("StateFlags", 0)) & 4:
-                jogos[app["appid"]] = nome
-    return jogos
+            if app.get("appid") and app.get("name") and not _STEAM_FERRAMENTAS.search(app["name"]):
+                yield biblioteca, app
+
+
+def steam_instalados() -> dict[str, str]:
+    """appid -> nome dos jogos instalados, em todas as bibliotecas da Steam."""
+    # StateFlags 4 = totalmente instalado
+    return {app["appid"]: app["name"] for _, app in steam_manifestos() if int(app.get("StateFlags", 0)) & 4}
 
 
 def steam_biblioteca() -> dict[str, str]:
@@ -322,6 +329,14 @@ def acao(jogo: Jogo, nome: str) -> str:
         _abrir(heroic)
         return f"O Heroic abriu: escolha {jogo.nome} e use Desinstalar."
     raise ValueError(f"{jogo.nome} não é de uma loja")
+
+
+def abrir_downloads_steam() -> None:
+    """Abre a tela de downloads da Steam (lá dá para pausar, retomar e mudar a ordem)."""
+    steam = steam_comando()
+    if not steam:
+        raise RuntimeError("a Steam não está instalada no PC")
+    _abrir([*steam, "steam://open/downloads"])
 
 
 def jogar(jogo: Jogo) -> int:

@@ -15,6 +15,7 @@
     <nav class="abas">
       <button class="aba ativa" data-nav data-aba="inicio">Início</button>
       <button class="aba" data-nav data-aba="biblioteca">Biblioteca</button>
+      <button class="aba" data-nav data-aba="downloads">Downloads <span id="contagem-downloads" class="emblema" hidden></span></button>
     </nav>
     <div class="status">
       <span id="entrada" class="pilula"></span>
@@ -31,8 +32,17 @@
       <div id="fileiras"></div>
     </section>
     <section id="biblioteca" class="visao" hidden>
+      <div class="barra-busca">
+        <input id="busca" type="search" placeholder="Buscar jogo…" autocomplete="off" data-nav>
+      </div>
       <div id="filtros" class="filtros"></div>
       <div id="grade" class="grade"></div>
+    </section>
+    <section id="downloads" class="visao" hidden>
+      <h2 class="titulo-secao">Espaço em disco</h2>
+      <div id="discos" class="discos"></div>
+      <h2 class="titulo-secao">Downloads</h2>
+      <div id="lista-downloads" class="lista-downloads"></div>
     </section>
   </main>
 

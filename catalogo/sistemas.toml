@@ -14,6 +14,8 @@
 #   core        core do RetroArch (só para emulador = "retroarch")
 #   libretro    pasta do acervo libretro-thumbnails, para as capas
 #   bios        arquivos de BIOS do SEU console, em ~/AllGames/roms/bios
+#   arquivos_sistema  pacotes de arquivos de apoio de um core do RetroArch
+#               (baixados do buildbot do libretro para ~/AllGames/roms/bios)
 #   controles   como padrão "controle"; "toque" se der para jogar tocando
 #
 # Emulador:
@@ -25,6 +27,13 @@
 #   saves       onde o emulador grava o progresso (vai para as cópias de segurança).
 #               Marcadores: {pasta_rom}, {nome} (nome da ROM sem extensão)
 #   alternativas  comando diferente quando o nome do AppImage contém a palavra
+#   baixar      "eden": `allgames emuladores instalar` baixa o AppImage sozinho
+#   combo_sair  true: segurar Select+Start fecha o emulador (o RetroArch já faz
+#               isso sozinho, salvando o estado)
+#
+# Clique e joga: quase tudo roda no RetroArch, que já vem configurado para
+# salvar o estado ao sair (Select+Start, como no R36S) e voltar de onde parou
+# na próxima vez. Os emuladores avulsos ficam para o que o RetroArch não roda.
 #   aviso       observação mostrada no portal e em `allgames emuladores`
 #
 # Nada aqui baixa ROMs, BIOS, chaves ou firmware: você usa os do seu console.
@@ -35,9 +44,13 @@
 nome = "RetroArch"
 flatpak = "org.libretro.RetroArch"
 # Os saves ficam ao lado da ROM, como no ArkOS (ao copiar o cartão do R36S os
-# saves .srm vêm junto) e a BIOS vem de ~/AllGames/roms/bios.
+# saves .srm vêm junto) e a BIOS vem de ~/AllGames/roms/bios. Select+Start sai
+# salvando o estado; ao abrir de novo, o jogo continua de onde parou.
 comando = ["{emulador}", "-f", "-L", "{core}", "--appendconfig", "{retroarch_cfg}", "{rom}"]
 saves = ["{pasta_rom}/{nome}.srm", "{pasta_rom}/{nome}.state*", "{pasta_rom}/{nome}.sav"]
+
+# Os emuladores abaixo (melonDS, PPSSPP, PCSX2, Dolphin) são alternativas aos
+# cores do RetroArch. Para usar um deles, troque `emulador` no sistema.
 
 [emulador.melonds]
 nome = "melonDS"
@@ -70,26 +83,31 @@ saves = [
 [emulador.azahar]
 nome = "Azahar"
 flatpak = "org.azahar_emu.Azahar"
+combo_sair = true
 comando = ["{emulador}", "-f", "{rom}"]
 saves = ["~/.var/app/org.azahar_emu.Azahar/data/azahar-emu/sdmc/Nintendo 3DS/*/*/title/*/*/data/**/*"]
 
 [emulador.xemu]
 nome = "xemu"
 flatpak = "app.xemu.xemu"
+combo_sair = true
 comando = ["{emulador}", "-full-screen", "-dvd_path", "{rom}"]
-aviso = "Na primeira vez, configure no xemu a BIOS, o boot ROM (MCPX) e o HD do seu Xbox, em ~/AllGames/roms/bios/xbox. Os saves ficam dentro do HD virtual (xbox_hdd.qcow2): copie esse arquivo para guardar."
+aviso = "Coloque em ~/AllGames/roms/bios/xbox o boot ROM (mcpx_1.0.bin), a BIOS e o HD (xbox_hdd.qcow2) do seu Xbox: o AllGames configura o xemu sozinho. Os saves ficam dentro do HD virtual."
 
 [emulador.switch]
-nome = "Emulador de Switch (Eden, Citron ou Ryujinx)"
+nome = "Eden (Nintendo Switch)"
 appimage = "switch"
+baixar = "eden"
+combo_sair = true
 comando = ["{emulador}", "-f", "-g", "{rom}"]
 # Se o nome do AppImage tiver uma destas palavras, usa o comando correspondente.
 alternativas = { ryujinx = ["{emulador}", "--fullscreen", "{rom}"], ryubing = ["{emulador}", "--fullscreen", "{rom}"] }
-aviso = "Baixe o AppImage do emulador no site oficial dele e coloque em ~/AllGames/emuladores/switch/. Ele precisa das chaves (prod.keys) e do firmware tirados do SEU Switch."
+aviso = "Coloque em ~/AllGames/roms/bios/switch as chaves (prod.keys e title.keys) e a pasta firmware tiradas do SEU Switch: o AllGames instala no Eden sozinho. Na primeira vez, escolha o controle em Emulação → Configurar → Controles."
 
 [emulador.xenia]
 nome = "Xenia Canary (Xbox 360, experimental no Linux)"
 appimage = "xenia"
+combo_sair = true
 comando = ["{emulador}", "--fullscreen", "{rom}"]
 aviso = "A versão Linux do Xenia ainda é experimental: muitos jogos não abrem. Coloque o AppImage em ~/AllGames/emuladores/xenia/."
 
@@ -149,7 +167,8 @@ libretro = "Nintendo - Nintendo 64"
 id = "nds"
 nome = "Nintendo DS"
 extensoes = ["nds", "zip"]
-emulador = "melonds"
+emulador = "retroarch"
+core = "melondsds"
 libretro = "Nintendo - Nintendo DS"
 controles = ["controle", "toque"]
 
@@ -166,14 +185,18 @@ id = "gc"
 pastas = ["gamecube"]
 nome = "GameCube"
 extensoes = ["iso", "rvz", "gcm", "gcz", "ciso", "m3u"]
-emulador = "dolphin"
+emulador = "retroarch"
+core = "dolphin"
+arquivos_sistema = ["Dolphin"]
 libretro = "Nintendo - GameCube"
 
 [[sistema]]
 id = "wii"
 nome = "Wii"
 extensoes = ["iso", "rvz", "wbfs", "wia", "gcz"]
-emulador = "dolphin"
+emulador = "retroarch"
+core = "dolphin"
+arquivos_sistema = ["Dolphin"]
 libretro = "Nintendo - Wii"
 
 [[sistema]]
@@ -206,15 +229,18 @@ bios = ["scph5501.bin (EUA)", "scph5500.bin (Japão)", "scph5502.bin (Europa)"]
 id = "ps2"
 nome = "PlayStation 2"
 extensoes = ["iso", "chd", "cso", "bin", "gz"]
-emulador = "pcsx2"
+emulador = "retroarch"
+core = "pcsx2"
 libretro = "Sony - PlayStation 2"
-bios = ["BIOS do seu PS2 (ex.: SCPH-70012.bin)"]
+bios = ["pcsx2/bios/ com a BIOS do seu PS2 (ex.: SCPH-70012.bin)"]
 
 [[sistema]]
 id = "psp"
 nome = "PSP"
 extensoes = ["iso", "cso", "pbp", "chd"]
-emulador = "ppsspp"
+emulador = "retroarch"
+core = "ppsspp"
+arquivos_sistema = ["PPSSPP"]
 libretro = "Sony - PlayStation Portable"
 
 # ------------------------------------------------------------------ Microsoft

@@ -72,7 +72,7 @@ class Jogo:
     capa: str = ""
     originais: list[Original] = field(default_factory=list)
     # Preenchidos pelo AllGames para ROMs (sistemas.py) e lojas (lojas.py):
-    origem: str = "catalogo"  # catalogo | rom | steam | heroic
+    origem: str = "catalogo"  # catalogo | rom | steam | heroic | portmaster
     acoes: list[str] = field(default_factory=lambda: ["jogar"])
     capa_url: str = ""
     capa_alternativa: str = ""

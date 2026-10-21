@@ -21,6 +21,7 @@ const estado = {
   podeSair: false,
   aba: "inicio",
   filtro: "todos",
+  busca: "",
   temControle: false,
   focado: null,
   inicioPartida: 0,
@@ -61,6 +62,10 @@ function quando(iso) {
   if (data.toDateString() === hoje.toDateString()) return `hoje às ${hora}`;
   if (data.toDateString() === ontem.toDateString()) return `ontem às ${hora}`;
   return `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${hora}`;
+}
+
+function normalizar(texto) {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
 function precisaDeControle(jogo) {
@@ -114,6 +119,10 @@ function selosControles(jogo, comTexto = false) {
 
 function etiqueta(jogo) {
   let texto = null;
+  if (jogo.download && !jogo.instalado) {
+    const rotulo = jogo.download.estado === "baixando" ? "Baixando" : "Pausado";
+    return el("span", { class: `etiqueta${jogo.download.estado === "baixando" ? " etiqueta-ativa" : ""}` }, `${rotulo} ${jogo.download.progresso}%`);
+  }
   if (jogo.tarefa === "instalando") texto = "Instalando…";
   else if (jogo.tarefa === "erro") texto = "Erro ao instalar";
   else if (jogo.instalado) return null;
@@ -296,16 +305,17 @@ function renderizarBiblioteca() {
       ),
     ),
   );
-  const jogos = estado.jogos.filter(atual[2]);
+  const termo = normalizar(estado.busca);
+  const jogos = estado.jogos.filter(atual[2]).filter((j) => !termo || normalizar(`${j.nome} ${j.plataforma}`).includes(termo));
   $("#grade").replaceChildren(...(jogos.length ? jogos.map(cartao) : [el("p", { class: "vazio" }, "Nenhum jogo aqui.")]));
 }
 
 function trocarAba(aba) {
   estado.aba = aba;
   for (const botao of document.querySelectorAll(".aba")) botao.classList.toggle("ativa", botao.dataset.aba === aba);
-  $("#inicio").hidden = aba !== "inicio";
-  $("#biblioteca").hidden = aba !== "biblioteca";
+  for (const visao of document.querySelectorAll(".visao")) visao.hidden = visao.id !== aba;
   window.scrollTo({ top: 0 });
+  if (aba === "downloads") carregarDownloads();
 }
 
 // ---------------------------------------------------------------- camadas (detalhe, aviso, jogando)
@@ -532,12 +542,23 @@ function acao(nome) {
   if (estado.jogando) return;
   if (nome === "a") estado.focado?.click();
   else if (nome === "b") camadaAberta() ? fecharCamada() : estado.aba !== "inicio" && trocarAba("inicio");
-  else if (nome === "lb") trocarAba("inicio");
-  else if (nome === "rb") trocarAba("biblioteca");
+  else if (nome === "lb" || nome === "rb") {
+    const abas = ["inicio", "biblioteca", "downloads"];
+    const i = abas.indexOf(estado.aba) + (nome === "rb" ? 1 : -1);
+    trocarAba(abas[(i + abas.length) % abas.length]);
+  }
   else mover(nome);
 }
 
 document.addEventListener("keydown", (evento) => {
+  if (evento.target.matches?.("input")) {
+    if (evento.key === "Escape" || evento.key === "ArrowDown" || evento.key === "Enter") {
+      evento.preventDefault();
+      evento.target.blur();
+      if (evento.key !== "Escape") mover("baixo");
+    }
+    return;
+  }
   const teclas = { ArrowUp: "cima", ArrowDown: "baixo", ArrowLeft: "esquerda", ArrowRight: "direita", Enter: "a", Escape: "b", Backspace: "b" };
   const nome = teclas[evento.key];
   if (!nome) return;
@@ -619,7 +640,100 @@ window.addEventListener("gamepaddisconnected", () => {
   definirControle(restantes.length > 0);
 });
 
+// ---------------------------------------------------------------- downloads e disco
+
+function formatarBytes(valor) {
+  if (valor == null) return "—";
+  const unidades = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (valor >= 1024 && i < unidades.length - 1) {
+    valor /= 1024;
+    i += 1;
+  }
+  return `${valor.toFixed(valor >= 100 || i === 0 ? 0 : 1).replace(".", ",")} ${unidades[i]}`;
+}
+
+function formatarTempo(segundos) {
+  if (!segundos) return "";
+  const horas = Math.floor(segundos / 3600);
+  const minutos = Math.max(1, Math.floor((segundos % 3600) / 60));
+  return horas ? `faltam ${horas} h ${minutos} min` : `faltam ${minutos} min`;
+}
+
+const NOMES_ESTADO = { baixando: "Baixando", pausado: "Pausado", "na fila": "Na fila", erro: "Erro", concluido: "Concluído" };
+const NOMES_ACAO = { pausar: "Pausar", continuar: "Continuar", cancelar: "Parar", abrir_steam: "Abrir downloads da Steam" };
+
+let temporizadorDownloads;
+async function carregarDownloads() {
+  clearTimeout(temporizadorDownloads);
+  let dados;
+  try {
+    dados = await api("/api/downloads");
+  } catch (erro) {
+    mensagem(`Não consegui ler os downloads: ${erro.message}`);
+    return;
+  }
+  $("#discos").replaceChildren(
+    ...dados.discos.map((d) => {
+      const usado = 100 - Math.round((100 * d.livre) / d.total);
+      return el(
+        "div",
+        { class: `disco${d.livre < 20 * 1024 ** 3 ? " disco-cheio" : ""}` },
+        el("div", { class: "disco-topo" }, el("b", {}, d.nomes.join(", ")), el("span", {}, `${formatarBytes(d.livre)} livres de ${formatarBytes(d.total)}`)),
+        el("div", { class: "barra" }, el("span", { style: `width:${usado}%` })),
+        el("small", {}, d.caminho),
+      );
+    }),
+  );
+  const lista = dados.downloads;
+  $("#lista-downloads").replaceChildren(
+    ...(lista.length
+      ? lista.map((d) => {
+          const progresso = d.total ? Math.round((100 * d.baixado) / d.total) : 0;
+          const detalhes = [
+            d.total ? `${formatarBytes(d.baixado)} de ${formatarBytes(d.total)}` : null,
+            d.velocidade ? `${formatarBytes(d.velocidade)}/s` : null,
+            formatarTempo(d.restante),
+          ].filter(Boolean);
+          return el(
+            "div",
+            { class: `download estado-${d.estado.replace(" ", "-")}` },
+            el("div", { class: "download-topo" }, el("b", {}, d.nome), el("span", { class: "pilula" }, `${d.loja} · ${NOMES_ESTADO[d.estado] || d.estado}`)),
+            el("div", { class: "barra" }, el("span", { style: `width:${progresso}%` })),
+            el("p", {}, `${progresso}%`, detalhes.length ? ` · ${detalhes.join(" · ")}` : ""),
+            d.cabe ? null : el("p", { class: "alerta" }, `Não cabe: faltam ${formatarBytes(d.total - d.baixado)} e o disco tem ${formatarBytes(d.livre)} livres.`),
+            d.erro ? el("p", { class: "alerta" }, d.erro) : null,
+            el(
+              "div",
+              { class: "acoes" },
+              d.acoes.map((acao) =>
+                el("button", { class: `botao${acao === "cancelar" ? " perigo" : ""}`, "data-nav": true, onclick: () => acaoDownload(d, acao) }, NOMES_ACAO[acao] || acao),
+              ),
+            ),
+          );
+        })
+      : [el("p", { class: "vazio" }, "Nenhum download agora. Instale um jogo da Steam ou da Epic pela Biblioteca.")]),
+  );
+  if (estado.aba === "downloads") temporizadorDownloads = setTimeout(carregarDownloads, 2000);
+}
+
+function acaoDownload(download, acao) {
+  api(`/api/download?id=${encodeURIComponent(download.id)}&acao=${acao}`, "POST")
+    .then(() => {
+      if (acao === "abrir_steam") mensagem("A tela de downloads da Steam abriu: lá dá para pausar e retomar.");
+      return carregarDownloads();
+    })
+    .catch((erro) => mensagem(`Não deu: ${erro.message}`));
+}
+
 // ---------------------------------------------------------------- início
+
+$("#busca").addEventListener("input", (evento) => {
+  estado.busca = evento.target.value;
+  renderizarBiblioteca();
+});
+// Com o controle, "A" na busca abre o teclado (o do Moonlight, no celular).
+$("#busca").addEventListener("click", (evento) => evento.target.focus());
 
 $("#sair").addEventListener("click", () => {
   api("/api/sair", "POST").catch(() => {});
@@ -636,9 +750,13 @@ async function carregar() {
     const dados = await api("/api/jogos");
     estado.jogos = dados.jogos;
     estado.podeSair = dados.pode_sair;
+    const contagem = $("#contagem-downloads");
+    contagem.hidden = !dados.downloads_ativos;
+    contagem.textContent = dados.downloads_ativos || "";
     renderizar();
     clearTimeout(temporizadorTarefas);
-    if (estado.jogos.some((j) => j.tarefa === "instalando")) temporizadorTarefas = setTimeout(carregar, 3000);
+    const ocupado = estado.jogos.some((j) => j.tarefa === "instalando") || dados.downloads_ativos;
+    if (ocupado) temporizadorTarefas = setTimeout(carregar, ocupado && estado.aba === "inicio" ? 5000 : 3000);
     if (dados.jogando && !estado.jogando) {
       const jogo = estado.jogos.find((j) => j.id === dados.jogando);
       if (jogo) mostrarJogando(jogo);

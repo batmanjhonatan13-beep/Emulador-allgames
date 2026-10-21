@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import caminhos, capas, lojas, saves
+from . import caminhos, capas, downloads, lojas, portmaster, saves
 from .catalogo import Jogo, verificar
 
 PORTA = 47800
@@ -50,7 +50,7 @@ def acoes(jogo: Jogo) -> list[str]:
     return [] if any(not v.ok for v in verificar(jogo)) else ["instalar"]
 
 
-def descrever(jogo: Jogo, tarefa: str | None = None) -> dict:
+def descrever(jogo: Jogo, tarefa: str | None = None, download: dict | None = None) -> dict:
     return {
         "id": jogo.id,
         "nome": jogo.nome,
@@ -68,6 +68,11 @@ def descrever(jogo: Jogo, tarefa: str | None = None) -> dict:
         "pendente": jogo.extra.get("falta", ""),
         "aviso": jogo.extra.get("aviso", ""),
         "tarefa": tarefa,
+        "download": (
+            {"estado": download["estado"], "progresso": round(100 * download["baixado"] / download["total"])}
+            if download and download["total"]
+            else None
+        ),
         "ultimo_save": _data(saves.ultimo_save(jogo)),
         "jogado_em": _data(jogo.jogado_em),
     }
@@ -142,6 +147,7 @@ class Portal(ThreadingHTTPServer):
         self.jogos: dict[str, Jogo] = {}
         self.partida = Partida(comando)
         self.tarefas = Tarefas()
+        self.downloads = downloads.Downloads()
         self.ao_sair = ao_sair
 
     def atualizar(self) -> dict[str, Jogo]:
@@ -181,8 +187,18 @@ class Handler(BaseHTTPRequestHandler):
             self._responder(HTTPStatus.OK, arquivo.read_bytes(), TIPOS_DE_ARQUIVO[arquivo.suffix])
         elif caminho == "/api/jogos":
             tarefas = self.server.tarefas
-            jogos = [descrever(j, tarefas.situacao(j.id)) for j in self.server.atualizar().values()]
-            self._json({"jogos": jogos, "jogando": self.server.partida.jogo, "pode_sair": bool(self.server.ao_sair)})
+            baixando = {d["id"]: d for d in self.server.downloads.lista()}
+            jogos = [descrever(j, tarefas.situacao(j.id), baixando.get(j.id)) for j in self.server.atualizar().values()]
+            self._json(
+                {
+                    "jogos": jogos,
+                    "jogando": self.server.partida.jogo,
+                    "pode_sair": bool(self.server.ao_sair),
+                    "downloads_ativos": sum(d["estado"] == "baixando" for d in baixando.values()),
+                }
+            )
+        elif caminho == "/api/downloads":
+            self._json({"downloads": self.server.downloads.lista(), "discos": downloads.discos()})
         elif caminho == "/api/estado":
             self._json({"jogando": self.server.partida.jogo})
         elif caminho == "/capa":
@@ -212,6 +228,17 @@ class Handler(BaseHTTPRequestHandler):
                 return getattr(self, f"_{acao}")(jogo)
             except (RuntimeError, ValueError) as erro:
                 return self._json({"erro": str(erro)}, HTTPStatus.CONFLICT)
+        if caminho == "/api/download":
+            consulta = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            acao = consulta.get("acao", [""])[0]
+            try:
+                if acao == "abrir_steam":
+                    lojas.abrir_downloads_steam()
+                else:
+                    self.server.downloads.acao(self._id() or "", acao)
+            except (RuntimeError, ValueError) as erro:
+                return self._json({"erro": str(erro)}, HTTPStatus.CONFLICT)
+            return self._json({"ok": True})
         if caminho == "/api/encerrar":
             self.server.partida.encerrar()
             return self._json({"jogando": None})
@@ -228,8 +255,22 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"jogando": jogo.id})
 
     def _instalar(self, jogo: Jogo):
+        if _epic_pelo_legendary(jogo):
+            tamanho = downloads.epic_tamanho(jogo.extra["app"])
+            livre = downloads.livre_em(downloads.pasta_epic())
+            if tamanho and tamanho[1] > livre:
+                return self._json(
+                    {"erro": f"não cabe: precisa de {_gb(tamanho[1])} e o disco tem {_gb(livre)} livres"},
+                    HTTPStatus.CONFLICT,
+                )
+            self.server.downloads.baixar_epic(jogo.id, jogo.extra["app"], jogo.nome)
+            return self._json({"mensagem": "Baixando. Acompanhe na aba Downloads."})
         if jogo.origem in ("steam", "heroic"):
             return self._json({"mensagem": lojas.acao(jogo, "instalar")})
+        if jogo.origem == "portmaster":
+            if not self.server.tarefas.iniciar(jogo.id, portmaster.comando_instalar(jogo)):
+                return self._json({"erro": "já está instalando"}, HTTPStatus.CONFLICT)
+            return self._json({"mensagem": f"Instalando {jogo.nome} pelo PortMaster."})
         if jogo.origem == "rom":
             argv = [*_allgames(), "emuladores", "instalar", jogo.extra["sistema"]]
         else:
@@ -239,7 +280,22 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"mensagem": "Instalando no PC. Acompanhe em ~/AllGames/logs/instalacoes.log"})
 
     def _desinstalar(self, jogo: Jogo):
+        if jogo.origem == "portmaster":
+            self.server.tarefas.iniciar(jogo.id, portmaster.comando_desinstalar(jogo))
+            return self._json({"mensagem": f"Desinstalando {jogo.nome}."})
+        if _epic_pelo_legendary(jogo):
+            argv = [*downloads.legendary(), "uninstall", jogo.extra["app"], "-y"]
+            self.server.tarefas.iniciar(jogo.id, argv)
+            return self._json({"mensagem": f"Desinstalando {jogo.nome}."})
         return self._json({"mensagem": lojas.acao(jogo, "desinstalar")})
+
+
+def _epic_pelo_legendary(jogo: Jogo) -> bool:
+    return jogo.origem == "heroic" and jogo.extra.get("runner") == "legendary" and bool(downloads.legendary())
+
+
+def _gb(quantidade: int) -> str:
+    return f"{quantidade / 1024**3:.1f} GB"
 
 
 def _allgames() -> list[str]:

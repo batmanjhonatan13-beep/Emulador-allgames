@@ -13,6 +13,9 @@ from . import caminhos
 from .catalogo import Jogo
 
 SERVICOS = ("app-dev.lizardbyte.app.Sunshine", "sunshine")
+# Na imagem Docker (steam-headless) o Sunshine é um serviço do sistema que o
+# usuário pode reiniciar.
+SERVICO_DOCKER = "steam-headless-sunshine.service"
 
 # Reconhece apps criados pelo AllGames mesmo que o repositório mude de lugar.
 _NOSSO_CMD = re.compile(r"""(^|/)allgames["']?\s+(jogar|portal)\b""")
@@ -111,7 +114,8 @@ def servico_ativo() -> str | None:
         r = subprocess.run(["systemctl", "--user", "is-active", nome], capture_output=True, text=True)
         if r.stdout.strip() == "active":
             return nome
-    return None
+    r = subprocess.run(["systemctl", "is-active", SERVICO_DOCKER], capture_output=True, text=True)
+    return SERVICO_DOCKER if r.stdout.strip() == "active" else None
 
 
 def reiniciar() -> bool:
@@ -119,4 +123,5 @@ def reiniciar() -> bool:
     nome = servico_ativo()
     if not nome:
         return False
-    return subprocess.run(["systemctl", "--user", "restart", nome]).returncode == 0
+    escopo = [] if nome == SERVICO_DOCKER else ["--user"]
+    return subprocess.run(["systemctl", *escopo, "restart", nome]).returncode == 0

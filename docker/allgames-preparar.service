@@ -1,0 +1,17 @@
+[Unit]
+Description=AllGames: instala emuladores, Heroic e configura tudo (só baixa o que falta)
+Wants=network-online.target
+After=network-online.target allgames-apps.service
+
+[Service]
+Type=oneshot
+User=steamheadless
+Environment=HOME=/home/steamheadless
+# Na primeira vez baixa alguns GB (emuladores e cores); depois só confere.
+TimeoutStartSec=0
+ExecStart=/usr/local/bin/allgames preparar --lojas
+StandardOutput=append:/home/steamheadless/AllGames/logs/preparar.log
+StandardError=append:/home/steamheadless/AllGames/logs/preparar.log
+
+[Install]
+WantedBy=steam-headless.target

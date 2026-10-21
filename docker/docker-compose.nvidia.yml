@@ -1,0 +1,8 @@
+# Complemento para placas NVIDIA (precisa do nvidia-container-toolkit no host):
+#   docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d --build
+services:
+  allgames:
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
