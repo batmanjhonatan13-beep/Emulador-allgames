@@ -80,6 +80,21 @@ achar() { find "$1" -type f -iname "$2" -print -quit 2>/dev/null; }
 # achar_original <padrão> : arquivo original em ORIGINAIS_DIR.
 achar_original() { achar "$ORIGINAIS_DIR" "$1"; }
 
+# achar_executavel <pasta> <padrão> : primeiro executável (não biblioteca) com o nome.
+achar_executavel() {
+  find "$1" -type f -perm -u+x -iname "$2" ! -name '*.so' ! -name '*.so.*' -print -quit 2>/dev/null
+}
+
+# rom_local : caminho da cópia da ROM dentro de JOGO_DIR (<id>.<extensão>).
+# Os emuladores gravam o save ao lado da ROM, então copiar a ROM para cá faz o
+# progresso ficar em ~/AllGames/jogos/<id>, junto com o resto do jogo.
+rom_local() { echo "$JOGO_DIR/$JOGO_ID.${ORIGINAL##*.}"; }
+
+copiar_rom() {
+  [[ -n $ORIGINAL ]] || falha "arquivo original não encontrado em $ORIGINAIS_DIR"
+  cp -u "$ORIGINAL" "$(rom_local)"
+}
+
 # rodar_appimage <arquivo> [args...] : executa substituindo o processo atual.
 # Sem a libfuse2 no sistema, a AppImage é extraída a cada execução (mais lento).
 rodar_appimage() {

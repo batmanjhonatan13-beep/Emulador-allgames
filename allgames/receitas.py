@@ -11,7 +11,7 @@ from .catalogo import Jogo, verificar
 
 
 def _ambiente(jogo: Jogo) -> dict[str, str]:
-    encontrados = [v.caminho for v in verificar(jogo, conferir_hash=False) if v.caminho]
+    encontrados = [v.caminho for v in verificar(jogo) if v.caminho]
     return {
         **os.environ,
         "JOGO_ID": jogo.id,
@@ -25,7 +25,7 @@ def _script(jogo: Jogo, funcao: str, log: Path | None = None) -> str:
     linhas = [
         "set -euo pipefail",
         f"source {shlex.quote(str(caminhos.RECEITAS / '_lib.sh'))}",
-        f"source {shlex.quote(str(jogo.receita))}",
+        f"source {shlex.quote(str(jogo.arquivo_receita))}",
         'mkdir -p "$JOGO_DIR"',
     ]
     if log:

@@ -13,9 +13,28 @@
 3. Toque no PC. O Moonlight mostra um PIN de 4 dígitos.
 4. No PC, abra https://localhost:47990/pin e digite o PIN.
 
-Pronto: ao tocar no PC aparecem os jogos publicados por `allgames sincronizar`, com capa.
+Pronto: ao tocar no PC aparece o **AllGames** (a tela com as capas) e cada jogo instalado
+também aparece sozinho na lista do Moonlight.
 
-## 3. Configurações recomendadas no Moonlight
+## 3. O portal AllGames
+
+Toque em **AllGames** no Moonlight. O PC abre a tela com as capas e você escolhe o jogo:
+
+- **Início:** o último jogo em destaque, "Continue jogando" e uma fileira por coleção (Pokémon,
+  Resident Evil...).
+- **Biblioteca:** todos os jogos, com filtros "Jogáveis no toque", "Com controle" e por console.
+- **Toque ou controle:** os selos de cada capa dizem como jogar, como no Game Pass. 👆 **Toque**:
+  dá para jogar tocando na tela. 🎮 **Controle**: precisa de controle.
+- Abriu um jogo de controle sem controle? O portal avisa. Conecte o controle (ou ative os controles
+  na tela do Moonlight) e o jogo abre sozinho.
+- Com controle: direcional para navegar, **A** seleciona, **B** volta, **LB/RB** trocam de aba.
+- Ao sair do jogo, você volta para o portal. Para fechar o portal, use o botão ⏻ no canto.
+
+Para o toque clicar direto na capa (e não mover um cursor), deixe o Moonlight em **toque direto**:
+no Android, desligue "usar a tela como trackpad"; no iOS, escolha o modo de toque direto
+("Direct Touch") nas configurações.
+
+## 4. Configurações recomendadas no Moonlight
 
 | Opção | Em casa (Wi-Fi 5 GHz) | Fora de casa (4G/5G) |
 |---|---|---|
@@ -29,7 +48,10 @@ Pronto: ao tocar no PC aparecem os jogos publicados por `allgames sincronizar`, 
 Para o jogo renderizar direto na resolução do celular, sem bordas pretas, publique os jogos
 com `allgames sincronizar --gamescope` (precisa do pacote `gamescope`: `sudo apt install gamescope`).
 
-## 4. Controles
+## 5. Controles
+
+O progresso fica sempre **no PC**, não no celular. Pode trocar de celular ou jogar no próprio PC
+que o save é o mesmo.
 
 - **Controle Bluetooth** (Xbox, DualSense, 8BitDo) ou controle de encaixar no celular (Backbone,
   Razer Kishi): é a melhor opção. O Sunshine entrega os comandos ao jogo como um controle de Xbox.
@@ -38,7 +60,7 @@ com `allgames sincronizar --gamescope` (precisa do pacote `gamescope`: `sudo apt
 - **Sair do jogo:** feche a sessão pelo menu do Moonlight durante o jogo, ou mantenha o dedo
   sobre o jogo na lista e escolha encerrar. O Sunshine fecha o jogo no PC.
 
-## 5. Jogar fora de casa (4G/5G)
+## 6. Jogar fora de casa (4G/5G)
 
 Use o Tailscale, uma rede privada entre os seus dispositivos. Não é preciso abrir portas no
 roteador, e ninguém de fora enxerga o PC.
@@ -51,7 +73,7 @@ roteador, e ninguém de fora enxerga o PC.
 O PC precisa estar ligado e com a sessão aberta. O Wake-on-LAN do Moonlight funciona na rede de
 casa, mas normalmente não pelo Tailscale.
 
-## 6. Jogar pelo navegador (opcional, o "site")
+## 7. Jogar pelo navegador (opcional, o "site")
 
 Quando não der para instalar o app, o Moonlight Web transforma o PC num site:
 

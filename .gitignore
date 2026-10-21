@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 
 # Nunca versione arquivos de jogos: eles ficam em ~/AllGames/originais.
+*.gb
+*.gbc
+*.gba
+*.nds
 *.z64
 *.n64
 *.v64

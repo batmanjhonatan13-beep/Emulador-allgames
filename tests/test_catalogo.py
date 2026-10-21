@@ -12,8 +12,8 @@ class CatalogoReal(unittest.TestCase):
         lib = caminhos.RECEITAS / "_lib.sh"
         for jogo in catalogo.carregar():
             with self.subTest(jogo=jogo.id):
-                self.assertTrue(jogo.receita.exists(), f"falta {jogo.receita}")
-                script = f'source "{lib}"; source "{jogo.receita}"; declare -F instalar executar'
+                self.assertTrue(jogo.arquivo_receita.exists(), f"falta {jogo.arquivo_receita}")
+                script = f'source "{lib}"; source "{jogo.arquivo_receita}"; declare -F instalar executar'
                 saida = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
                 self.assertEqual(saida.returncode, 0, saida.stderr)
 
@@ -59,6 +59,24 @@ class Verificacao(unittest.TestCase):
         errado = catalogo.verificar(self._jogo(arquivo="rom.z64", sha1=["0" * 40]))[0]
         self.assertIn("SHA-1", errado.problema)
 
+    def test_acha_a_rom_certa_pelo_hash_qualquer_que_seja_o_nome(self):
+        (caminhos.originais() / "Pokemon - Ruby.gba").write_bytes(b"ruby")
+        (caminhos.originais() / "minha rom.GBA").write_bytes(b"abc")
+        (caminhos.originais() / "jogo.gbc").write_bytes(b"gbc")
+        certo = "a9993e364706816aba3e25717850c26c9cd0d89d"
+        (resultado,) = catalogo.verificar(self._jogo(arquivo="*.gba", sha1=[certo]))
+        self.assertEqual(resultado.caminho.name, "minha rom.GBA")
+        (resultado,) = catalogo.verificar(self._jogo(arquivo="*.gb|*.gbc"))
+        self.assertEqual(resultado.caminho.name, "jogo.gbc")
+
+    def test_cache_de_sha1(self):
+        rom = caminhos.originais() / "rom.z64"
+        rom.write_bytes(b"abc")
+        self.assertEqual(catalogo.sha1(rom), "a9993e364706816aba3e25717850c26c9cd0d89d")
+        self.assertTrue((caminhos.base() / ".sha1-cache.json").exists())
+        rom.write_bytes(b"abcd")  # tamanho mudou: calcula de novo
+        self.assertEqual(catalogo.sha1(rom), "81fe8bfe87576c3ecb22426f8e57847382917acf")
+
 
 class Validacao(unittest.TestCase):
     def _carregar(self, toml: str):
@@ -77,6 +95,21 @@ class Validacao(unittest.TestCase):
     def test_tipo_invalido(self):
         with self.assertRaisesRegex(catalogo.ErroCatalogo, "tipo"):
             self._carregar('[[jogo]]\nid="a"\nnome="A"\nplataforma="P"\ntipo="x"\n')
+
+    def test_padroes_da_receita(self):
+        toml = (
+            '[receita.mgba]\ntipo="emulador"\ncolecao="Pokémon"\nsaves=["*.sav"]\n'
+            '[[jogo]]\nid="a"\nnome="A"\nplataforma="GBA"\nreceita="mgba"\n'
+            '[[jogo]]\nid="b"\nnome="B"\nplataforma="GBA"\nreceita="mgba"\ncolecao="Outra"\n'
+        )
+        a, b = self._carregar(toml)
+        self.assertEqual((a.tipo, a.colecao, a.saves), ("emulador", "Pokémon", ["*.sav"]))
+        self.assertEqual(b.colecao, "Outra")
+        self.assertEqual(a.arquivo_receita.name, "mgba.sh")
+
+    def test_controles_invalidos(self):
+        with self.assertRaisesRegex(catalogo.ErroCatalogo, "controles"):
+            self._carregar('[[jogo]]\nid="a"\nnome="A"\nplataforma="P"\ntipo="port"\ncontroles=["teclado"]\n')
 
     def test_campo_desconhecido(self):
         with self.assertRaisesRegex(catalogo.ErroCatalogo, "inválida"):

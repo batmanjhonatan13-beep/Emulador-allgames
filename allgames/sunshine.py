@@ -15,7 +15,8 @@ from .catalogo import Jogo
 SERVICOS = ("app-dev.lizardbyte.app.Sunshine", "sunshine")
 
 # Reconhece apps criados pelo AllGames mesmo que o repositório mude de lugar.
-_NOSSO_CMD = re.compile(r"""(^|/)allgames["']?\s+jogar\s""")
+_NOSSO_CMD = re.compile(r"""(^|/)allgames["']?\s+(jogar|portal)\b""")
+NOME_DO_PORTAL = "AllGames"
 
 APPS_PADRAO = {
     "env": {"PATH": "$(PATH):$(HOME)/.local/bin"},
@@ -52,6 +53,19 @@ def app_do_jogo(jogo: Jogo, capa: Path | None, gamescope: bool = False) -> dict:
     if capa:
         app["image-path"] = str(capa)
     return app
+
+
+def app_do_portal(gamescope: bool = False) -> dict:
+    """O portal com as capas (estilo Game Pass) como primeiro app do Moonlight."""
+    opcoes = " --gamescope" if gamescope else ""
+    return {
+        "name": NOME_DO_PORTAL,
+        "cmd": f"{_citar(str(caminhos.EXECUTAVEL))} portal --kiosk{opcoes}",
+        "image-path": str(caminhos.PORTAL / "capa.png"),
+        "auto-detach": True,
+        "wait-all": True,
+        "exit-timeout": 5,
+    }
 
 
 def eh_nosso(app: dict) -> bool:

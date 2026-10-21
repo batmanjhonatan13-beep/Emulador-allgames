@@ -68,6 +68,8 @@ systemctl --user enable --now app-dev.lizardbyte.app.Sunshine 2>/dev/null ||
 # --- AllGames ---------------------------------------------------------------
 mkdir -p "$HOME/AllGames/originais" "$HOME/.local/bin"
 ln -sf "$REPO/bin/allgames" "$HOME/.local/bin/allgames"
+msg "Publicando o portal AllGames (tela com as capas) no Sunshine"
+"$REPO/bin/allgames" sincronizar
 
 cat <<EOF
 
@@ -78,11 +80,13 @@ $(printf '\033[1;32m')Pronto!$(printf '\033[0m') Próximos passos:
  2. No celular, instale o Moonlight (Play Store, F-Droid ou App Store).
     Na mesma rede Wi-Fi o PC aparece sozinho; toque nele e digite o PIN
     mostrado em https://localhost:47990/pin
- 3. Copie os arquivos dos seus jogos para ~/AllGames/originais e rode:
+ 3. Copie os arquivos dos seus jogos para ~/AllGames/originais (o nome não
+    importa para os Pokémon: eles são reconhecidos pelo conteúdo) e rode:
       allgames verificar
-      allgames instalar sm64
- 4. Para jogar fora de casa: scripts/instalar-tailscale.sh
- 5. Confira tudo com: allgames doutor
+      allgames instalar pokemon-emerald
+ 4. No Moonlight, abra "AllGames": é a tela com as capas, estilo Game Pass.
+ 5. Para jogar fora de casa: scripts/instalar-tailscale.sh
+ 6. Confira tudo com: allgames doutor
 EOF
 if [[ ${precisa_relogar:-0} == 1 ]]; then
   echo

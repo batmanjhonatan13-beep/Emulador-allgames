@@ -28,7 +28,10 @@ class Sincronizar(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             cli.cmd_sincronizar(self.jogos, argparse.Namespace(gamescope=gamescope, sem_reiniciar=True))
         apps = json.loads((caminhos.config_sunshine() / "apps.json").read_text())["apps"]
-        return next(a["cmd"] for a in apps if a["name"] == "Teste")
+        portal = next(a["cmd"] for a in apps if a["name"] == "AllGames")
+        jogo = next(a["cmd"] for a in apps if a["name"] == "Teste")
+        self.assertEqual("--gamescope" in portal, "--gamescope" in jogo)
+        return jogo
 
     def test_gamescope_e_mantido_quando_nao_informado(self):
         self.assertNotIn("--gamescope", self._sincronizar(None))

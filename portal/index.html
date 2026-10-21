@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AllGames</title>
+  <link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="11" height="11" rx="3"/><rect x="18" y="3" width="11" height="11" rx="3" opacity=".55"/><rect x="3" y="18" width="11" height="11" rx="3" opacity=".55"/><rect x="18" y="18" width="11" height="11" rx="3"/></svg>
+      <span>AllGames</span>
+    </div>
+    <nav class="abas">
+      <button class="aba ativa" data-nav data-aba="inicio">Início</button>
+      <button class="aba" data-nav data-aba="biblioteca">Biblioteca</button>
+    </nav>
+    <div class="status">
+      <span id="entrada" class="pilula"></span>
+      <span id="relogio" class="relogio"></span>
+      <button id="sair" class="botao-icone" data-nav hidden aria-label="Sair do AllGames">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="inicio" class="visao">
+      <div id="destaque" class="destaque"></div>
+      <div id="fileiras"></div>
+    </section>
+    <section id="biblioteca" class="visao" hidden>
+      <div id="filtros" class="filtros"></div>
+      <div id="grade" class="grade"></div>
+    </section>
+  </main>
+
+  <div id="detalhe" class="camada" hidden></div>
+  <div id="aviso" class="camada" hidden></div>
+  <div id="jogando" class="camada camada-jogando" hidden></div>
+  <div id="mensagem" class="mensagem" hidden></div>
+
+  <footer id="dica" class="dica" hidden>
+    <span><b class="tecla a">A</b> Selecionar</span>
+    <span><b class="tecla b">B</b> Voltar</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

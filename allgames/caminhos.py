@@ -5,6 +5,7 @@ Tudo fica em ~/AllGames (ou em $ALLGAMES_HOME):
     jogos/<id>/ instalação de cada jogo
     capas/      capas baixadas para o Moonlight
     logs/       saída de cada jogo aberto pelo Sunshine
+    backups/    cópias dos saves, feitas antes de cada partida
 """
 
 import os
@@ -15,6 +16,7 @@ CATALOGO = REPO / "catalogo" / "jogos.toml"
 RECEITAS = REPO / "receitas"
 CAPAS_DO_REPO = REPO / "capas"
 EXECUTAVEL = REPO / "bin" / "allgames"
+PORTAL = REPO / "portal"
 
 
 def base() -> Path:
@@ -35,6 +37,10 @@ def capas() -> Path:
 
 def logs() -> Path:
     return base() / "logs"
+
+
+def backups() -> Path:
+    return base() / "backups"
 
 
 def config_sunshine() -> Path:

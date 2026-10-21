@@ -48,6 +48,15 @@ class AppDoJogo(unittest.TestCase):
         self.assertTrue(sunshine.eh_nosso(app))
 
 
+class AppDoPortal(unittest.TestCase):
+    def test_portal_e_reconhecido_como_nosso(self):
+        app = sunshine.app_do_portal(gamescope=True)
+        self.assertEqual(app["name"], "AllGames")
+        self.assertTrue(app["cmd"].endswith("portal --kiosk --gamescope"))
+        self.assertTrue(app["image-path"].endswith("portal/capa.png"))
+        self.assertTrue(sunshine.eh_nosso(app))
+
+
 class Arquivo(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

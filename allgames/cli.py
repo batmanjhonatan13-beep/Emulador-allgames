@@ -2,20 +2,21 @@
 
 import argparse
 import sys
+from datetime import datetime
 
-from . import caminhos, capas, catalogo, doutor, receitas, sunshine
+from . import caminhos, capas, catalogo, doutor, portal, receitas, saves, sunshine
 
 
 def cmd_listar(jogos: list[catalogo.Jogo], args) -> int:
-    print(f"{'ID':<15} {'JOGO':<26} {'PLATAFORMA':<13} {'TIPO':<9} SITUAÇÃO")
+    print(f"{'ID':<20} {'JOGO':<42} {'PLATAFORMA':<17} {'TIPO':<9} SITUAÇÃO")
     for jogo in jogos:
         if jogo.instalado:
             situacao = "✔ instalado"
-        elif any(not v.ok for v in catalogo.verificar(jogo, conferir_hash=False)):
+        elif any(not v.ok for v in catalogo.verificar(jogo)):
             situacao = "falta o original"
         else:
             situacao = "pronto para instalar"
-        print(f"{jogo.id:<15} {jogo.nome:<26} {jogo.plataforma:<13} {jogo.tipo:<9} {situacao}")
+        print(f"{jogo.id:<20} {jogo.nome:<42} {jogo.plataforma:<17} {jogo.tipo:<9} {situacao}")
     print(f"\nOriginais ficam em {caminhos.originais()} — detalhes: allgames verificar")
     return 0
 
@@ -77,6 +78,9 @@ def cmd_jogar(jogos: list[catalogo.Jogo], args) -> int:
     if not jogo.instalado:
         print(f"{jogo.nome} não está instalado. Rode: allgames instalar {jogo.id}", file=sys.stderr)
         return 1
+    # Guarda os saves da partida anterior antes de abrir o jogo de novo.
+    saves.fazer_backup(jogo)
+    (jogo.pasta / ".jogado").touch()
     receitas.jogar(jogo, gamescope=args.gamescope)
     return 0  # não chega aqui: o processo vira o jogo
 
@@ -88,10 +92,11 @@ def cmd_sincronizar(jogos: list[catalogo.Jogo], args) -> int:
     if gamescope is None:  # sem --gamescope/--no-gamescope: mantém o que já estava publicado
         gamescope = any("--gamescope" in a.get("cmd", "") for a in atual.get("apps", []) if sunshine.eh_nosso(a))
     instalados = [j for j in jogos if j.instalado]
-    apps = [sunshine.app_do_jogo(j, capas.obter(j), gamescope) for j in instalados]
+    apps = [sunshine.app_do_portal(gamescope)]
+    apps += [sunshine.app_do_jogo(j, capas.obter(j), gamescope) for j in instalados]
     novo, conflitos = sunshine.mesclar(atual, apps)
     backup = sunshine.gravar(arquivo, novo)
-    print(f"✔ {len(apps) - len(conflitos)} jogo(s) publicados em {arquivo}")
+    print(f"✔ portal AllGames + {len(instalados)} jogo(s) publicados em {arquivo}")
     if backup:
         print(f"  cópia do arquivo anterior: {backup}")
     for nome in conflitos:
@@ -107,6 +112,62 @@ def cmd_sincronizar(jogos: list[catalogo.Jogo], args) -> int:
 
 def cmd_doutor(jogos, args) -> int:
     return doutor.executar()
+
+
+def cmd_portal(jogos: list[catalogo.Jogo], args) -> int:
+    return portal.servir(jogos, args.porta, args.publico, args.kiosk, args.gamescope)
+
+
+def _quando(timestamp: float | None) -> str:
+    return datetime.fromtimestamp(timestamp).strftime("%d/%m/%Y %H:%M") if timestamp else "—"
+
+
+def cmd_saves(jogos: list[catalogo.Jogo], args) -> int:
+    if not args.id:
+        print(f"{'ID':<22} {'ÚLTIMO SAVE':<17} {'ARQUIVOS':>8} {'CÓPIAS':>7}")
+        for jogo in jogos:
+            if jogo.instalado:
+                n = len(saves.arquivos(jogo))
+                print(f"{jogo.id:<22} {_quando(saves.ultimo_save(jogo)):<17} {n:>8} {len(saves.backups(jogo)):>7}")
+        print(f"\nCópias de segurança em {caminhos.backups()} — detalhes: allgames saves ID")
+        return 0
+    jogo = catalogo.buscar(jogos, args.id)
+    print(f"{jogo.nome}: progresso salvo no PC")
+    if not jogo.saves:
+        print("  o catálogo não diz onde este jogo grava os saves")
+    for arquivo in saves.arquivos(jogo):
+        print(f"  {_quando(arquivo.stat().st_mtime)}  {arquivo}")
+    copias = saves.backups(jogo)
+    print(f"\nCópias ({len(copias)}), restaure com: allgames restaurar {jogo.id} [NOME]")
+    for copia in copias:
+        print(f"  {copia.name}")
+    return 0
+
+
+def cmd_backup(jogos: list[catalogo.Jogo], args) -> int:
+    for jogo in _selecionar(jogos, args.ids) if args.ids else [j for j in jogos if j.instalado]:
+        copia = saves.fazer_backup(jogo)
+        if copia:
+            print(f"✔ {jogo.nome}: {copia}")
+        elif saves.arquivos(jogo):
+            print(f"– {jogo.nome}: nada mudou desde a última cópia")
+    return 0
+
+
+def cmd_restaurar(jogos: list[catalogo.Jogo], args) -> int:
+    jogo = catalogo.buscar(jogos, args.id)
+    copias = {c.name: c for c in saves.backups(jogo)}
+    if not copias:
+        print(f"{jogo.nome} ainda não tem cópias de saves.", file=sys.stderr)
+        return 1
+    nome = args.copia or max(copias)
+    if nome not in copias:
+        print(f"Cópia {nome!r} não existe. Veja: allgames saves {jogo.id}", file=sys.stderr)
+        return 1
+    for arquivo in saves.restaurar(jogo, copias[nome]):
+        print(f"✔ {arquivo}")
+    print(f"Saves de {jogo.nome} voltaram para {nome} (o estado anterior também foi guardado).")
+    return 0
 
 
 def montar_parser() -> argparse.ArgumentParser:
@@ -142,6 +203,26 @@ def montar_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--sem-reiniciar", action="store_true", help="não reinicia o serviço do Sunshine")
     p.set_defaults(func=cmd_sincronizar)
+
+    p = sub.add_parser("portal", help="tela com as capas dos jogos, estilo Game Pass")
+    p.add_argument("--kiosk", action="store_true", help="abre o navegador em tela cheia (é o que o Sunshine usa)")
+    p.add_argument("--porta", type=int, default=portal.PORTA)
+    p.add_argument("--publico", action="store_true", help="aceita acesso pela rede, não só deste PC")
+    p.add_argument("--gamescope", action="store_true", help="abre os jogos no gamescope na resolução do celular")
+    p.set_defaults(func=cmd_portal)
+
+    p = sub.add_parser("saves", help="mostra onde cada jogo salva no PC e as cópias de segurança")
+    p.add_argument("id", nargs="?", metavar="ID")
+    p.set_defaults(func=cmd_saves)
+
+    p = sub.add_parser("backup", help="copia os saves agora (também é feito antes de cada partida)")
+    p.add_argument("ids", nargs="*", metavar="ID")
+    p.set_defaults(func=cmd_backup)
+
+    p = sub.add_parser("restaurar", help="volta os saves de um jogo para uma cópia")
+    p.add_argument("id", metavar="ID")
+    p.add_argument("copia", nargs="?", metavar="NOME", help="nome da cópia (padrão: a mais recente)")
+    p.set_defaults(func=cmd_restaurar)
 
     p = sub.add_parser("doutor", help="confere se o PC está pronto para o streaming")
     p.set_defaults(func=cmd_doutor)

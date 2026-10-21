@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import caminhos, sunshine
+from . import caminhos, portal, sunshine
 
 
 def _rodar(*cmd: str) -> str:
@@ -91,6 +91,13 @@ def _tailscale() -> tuple[bool, str, str]:
     return True, f"Tailscale conectado — use {ip.splitlines()[0]} no Moonlight fora de casa", ""
 
 
+def _portal() -> tuple[bool, str, str]:
+    for nome in portal.NAVEGADORES:
+        if shutil.which(nome):
+            return True, f"tela de capas abre no {nome} (app AllGames no Moonlight)", ""
+    return False, "nenhum navegador para a tela de capas", "sudo apt install firefox"
+
+
 def _pastas() -> tuple[bool, str, str]:
     pasta = caminhos.originais()
     if not pasta.is_dir():
@@ -106,6 +113,7 @@ VERIFICACOES = [
     ("Vídeo", _codificador),
     ("Controles", _entrada),
     ("Acesso remoto", _tailscale),
+    ("Portal", _portal),
     ("Jogos", _pastas),
 ]
 

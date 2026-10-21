@@ -1,37 +1,335 @@
 # Catálogo de jogos do AllGames.
 #
-# Cada [[jogo]] vira um "app" no Sunshine e aparece no Moonlight do celular
-# depois de `allgames instalar <id>` e `allgames sincronizar`.
+# Cada [[jogo]] aparece no portal (a tela com capas) e vira um app no Sunshine
+# depois de `allgames instalar <id>`.
 #
 # Campos:
-#   id          identificador curto; precisa existir receitas/<id>.sh
+#   id          identificador curto
 #   nome        nome que aparece no celular
 #   plataforma  console original
 #   tipo        "port"      -> port nativo para PC feito a partir da descompilação
 #               "recomp"    -> recompilação estática do binário original
 #               "emulador"  -> descompilação só "matching" (gera a ROM igual à
 #                              original), então o jogo roda em emulador
-#   decomp      repositório da descompilação (da lista SamidyFR/Game-Decompilations)
-#   projeto     repositório usado de fato para gerar o executável
+#               "pc"        -> versão de PC do jogo (Steam/Proton)
+#   receita     receitas/<receita>.sh; sem o campo, usa receitas/<id>.sh
+#   colecao     agrupa os jogos em fileiras no portal (ex.: "Pokémon")
+#   descricao   texto curto mostrado no portal
+#   controles   "controle" (precisa de controle: Bluetooth ou o virtual do
+#               Moonlight) e/ou "toque" (dá para jogar tocando na tela)
+#   saves       onde o jogo grava o progresso no PC: caminhos relativos à pasta
+#               do jogo (~/AllGames/jogos/<id>) ou começando com "~/".
+#               Aceita curingas (* e **). É o que `allgames saves` mostra e o
+#               que vai para as cópias de segurança.
+#   decomp      repositório da descompilação (lista SamidyFR/Game-Decompilations)
+#   projeto     repositório usado de fato para rodar o jogo
 #   capa        "Sistema/Nome" do acervo libretro-thumbnails (opcional);
 #               um PNG em capas/<id>.png tem prioridade
-#   originais   arquivos do SEU jogo original que precisam estar em
-#               ~/AllGames/originais. `arquivo` aceita curingas (*) e não
-#               diferencia maiúsculas. `sha1` (opcional) lista os hashes aceitos.
-#               `opcional = true` quando o jogo roda sem eles (ex.: demo).
+#   originais   arquivos do SEU jogo original em ~/AllGames/originais.
+#               `arquivo` aceita curingas e alternativas ("*.gb|*.gbc") e não
+#               diferencia maiúsculas. Com `sha1`, o arquivo é reconhecido pelo
+#               conteúdo, então o nome não importa. `opcional = true` quando o
+#               jogo roda sem ele (ex.: demo).
 #
+# [receita.<nome>] define valores padrão para todos os jogos daquela receita.
 # Nada aqui baixa ROMs ou dados de jogos: você fornece a cópia que já tem.
+
+[receita.mgba]
+tipo = "emulador"
+colecao = "Pokémon"
+projeto = "https://github.com/mgba-emu/mgba"
+controles = ["controle"]
+saves = ["*.sav", "*.ss[0-9]"]
+
+[receita.melonds]
+tipo = "emulador"
+colecao = "Pokémon"
+projeto = "https://github.com/melonDS-emu/melonDS"
+controles = ["controle"]
+saves = ["*.sav", "*.ml[0-9]"]
+
+# ------------------------------------------------------------------ Pokémon
+# As descompilações do pret reconstroem a ROM byte a byte, e os hashes abaixo
+# são os mesmos que cada projeto usa para conferir o resultado. Como o
+# resultado é a própria ROM, o jogo roda no emulador com a sua cópia.
+
+[[jogo]]
+id = "pokemon-red"
+nome = "Pokémon Red"
+plataforma = "Game Boy"
+receita = "mgba"
+descricao = "Onde tudo começou: Kanto, os 151 originais e a Equipe Rocket."
+decomp = "https://github.com/pret/pokered"
+capa = "Nintendo - Game Boy/Pokemon - Red Version (USA, Europe) (SGB Enhanced)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Red (EUA/Europa)", sha1 = ["ea9bcae617fdf159b045185467ae58b2e4a48b9a"] }]
+
+[[jogo]]
+id = "pokemon-blue"
+nome = "Pokémon Blue"
+plataforma = "Game Boy"
+receita = "mgba"
+descricao = "A outra metade de Kanto, com os Pokémon exclusivos da versão azul."
+decomp = "https://github.com/pret/pokered"
+capa = "Nintendo - Game Boy/Pokemon - Blue Version (USA, Europe) (SGB Enhanced)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Blue (EUA/Europa)", sha1 = ["d7037c83e1ae5b39bde3c30787637ba1d4c48ce2"] }]
+
+[[jogo]]
+id = "pokemon-yellow"
+nome = "Pokémon Yellow"
+plataforma = "Game Boy"
+receita = "mgba"
+descricao = "Kanto com o Pikachu andando atrás de você, inspirado no desenho."
+decomp = "https://github.com/pret/pokeyellow"
+capa = "Nintendo - Game Boy/Pokemon - Yellow Version - Special Pikachu Edition (USA, Europe) (CGB+SGB Enhanced)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Yellow (EUA/Europa)", sha1 = ["cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1"] }]
+
+[[jogo]]
+id = "pokemon-gold"
+nome = "Pokémon Gold"
+plataforma = "Game Boy Color"
+receita = "mgba"
+descricao = "Johto, relógio em tempo real, dia e noite e a volta a Kanto."
+decomp = "https://github.com/pret/pokegold"
+capa = "Nintendo - Game Boy Color/Pokemon - Gold Version (USA, Europe) (SGB Enhanced) (GB Compatible)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Gold (EUA/Europa)", sha1 = ["d8b8a3600a465308c9953dfa04f0081c05bdcb94"] }]
+
+[[jogo]]
+id = "pokemon-silver"
+nome = "Pokémon Silver"
+plataforma = "Game Boy Color"
+receita = "mgba"
+descricao = "Johto pela versão prateada, com Lugia na capa."
+decomp = "https://github.com/pret/pokegold"
+capa = "Nintendo - Game Boy Color/Pokemon - Silver Version (USA, Europe) (SGB Enhanced) (GB Compatible)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Silver (EUA/Europa)", sha1 = ["49b163f7e57702bc939d642a18f591de55d92dae"] }]
+
+[[jogo]]
+id = "pokemon-crystal"
+nome = "Pokémon Crystal"
+plataforma = "Game Boy Color"
+receita = "mgba"
+descricao = "A versão definitiva de Johto, com Suicune e a Torre da Batalha."
+decomp = "https://github.com/pret/pokecrystal"
+capa = "Nintendo - Game Boy Color/Pokemon - Crystal Version (USA, Europe) (Rev 1)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Crystal (EUA/Europa, 1.0 ou 1.1)", sha1 = ["f4cd194bdee0d04ca4eac29e09b8e4e9d818c133", "f2f52230b536214ef7c9924f483392993e226cfb"] }]
+
+[[jogo]]
+id = "pokemon-pinball"
+nome = "Pokémon Pinball"
+plataforma = "Game Boy Color"
+receita = "mgba"
+descricao = "Pinball nas mesas Red e Blue, capturando Pokémon a cada bola."
+decomp = "https://github.com/pret/pokepinball"
+capa = "Nintendo - Game Boy Color/Pokemon Pinball (USA, Australia) (Rumble Version) (SGB Enhanced) (GB Compatible)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon Pinball (EUA)", sha1 = ["9402014d14969432142abfde728c6f1a10ee4dac"] }]
+
+[[jogo]]
+id = "pokemon-tcg"
+nome = "Pokémon Trading Card Game"
+plataforma = "Game Boy Color"
+receita = "mgba"
+descricao = "O jogo de cartas oficial, com clubes, mestres e mais de 200 cartas."
+decomp = "https://github.com/pret/poketcg"
+capa = "Nintendo - Game Boy Color/Pokemon Trading Card Game (USA, Australia) (SGB Enhanced) (GB Compatible)"
+originais = [{ arquivo = "*.gb|*.gbc", descricao = "ROM do Pokémon TCG (EUA)", sha1 = ["0f8670a583255cff3e5b7ca71b5d7454d928fc48"] }]
+
+[[jogo]]
+id = "pokemon-ruby"
+nome = "Pokémon Ruby"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "Hoenn, batalhas em dupla, habilidades e a Equipe Magma."
+decomp = "https://github.com/pret/pokeruby"
+capa = "Nintendo - Game Boy Advance/Pokemon - Ruby Version (USA)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon Ruby (EUA, qualquer revisão)", sha1 = ["f28b6ffc97847e94a6c21a63cacf633ee5c8df1e", "610b96a9c9a7d03d2bafb655e7560ccff1a6d894", "5b64eacf892920518db4ec664e62a086dd5f5bc8"] }]
+
+[[jogo]]
+id = "pokemon-sapphire"
+nome = "Pokémon Sapphire"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "Hoenn pela versão azul, contra a Equipe Aqua."
+decomp = "https://github.com/pret/pokeruby"
+capa = "Nintendo - Game Boy Advance/Pokemon - Sapphire Version (USA)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon Sapphire (EUA, qualquer revisão)", sha1 = ["3ccbbd45f8553c36463f13b938e833f652b793e4", "4722efb8cd45772ca32555b98fd3b9719f8e60a9", "89b45fb172e6b55d51fc0e61989775187f6fe63c"] }]
+
+[[jogo]]
+id = "pokemon-emerald"
+nome = "Pokémon Emerald"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "A versão completa de Hoenn, com a Battle Frontier."
+decomp = "https://github.com/pret/pokeemerald"
+capa = "Nintendo - Game Boy Advance/Pokemon - Emerald Version (USA, Europe)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon Emerald (EUA/Europa)", sha1 = ["f3ae088181bf583e55daf962a92bb46f4f1d07b7"] }]
+
+[[jogo]]
+id = "pokemon-firered"
+nome = "Pokémon FireRed"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "Kanto refeito para o GBA, com as Sevii Islands."
+decomp = "https://github.com/pret/pokefirered"
+capa = "Nintendo - Game Boy Advance/Pokemon - FireRed Version (USA, Europe)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon FireRed (EUA, 1.0 ou 1.1)", sha1 = ["41cb23d8dccc8ebd7c649cd8fbb58eeace6e2fdc", "dd5945db9b930750cb39d00c84da8571feebf417"] }]
+
+[[jogo]]
+id = "pokemon-leafgreen"
+nome = "Pokémon LeafGreen"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "A versão verde do remake de Kanto."
+decomp = "https://github.com/pret/pokefirered"
+capa = "Nintendo - Game Boy Advance/Pokemon - LeafGreen Version (USA, Europe)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon LeafGreen (EUA, 1.0 ou 1.1)", sha1 = ["574fa542ffebb14be69902d1d36f1ec0a4afd71e", "7862c67bdecbe21d1d69ce082ce34327e1c6ed5e"] }]
+
+[[jogo]]
+id = "pokemon-pinball-rs"
+nome = "Pokémon Pinball: Ruby & Sapphire"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "Pinball com os Pokémon de Hoenn e as mesas Ruby e Sapphire."
+decomp = "https://github.com/pret/pokepinballrs"
+capa = "Nintendo - Game Boy Advance/Pokemon Pinball - Ruby & Sapphire (USA)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon Pinball R&S (EUA)", sha1 = ["9fec81ce2c5df589e0371a0bf2f92a5fe8db730b"] }]
+
+[[jogo]]
+id = "pokemon-md-red"
+nome = "Pokémon Mystery Dungeon: Red Rescue Team"
+plataforma = "Game Boy Advance"
+receita = "mgba"
+descricao = "Você vira um Pokémon e explora masmorras que mudam a cada visita."
+decomp = "https://github.com/pret/pmd-red"
+capa = "Nintendo - Game Boy Advance/Pokemon Mystery Dungeon - Red Rescue Team (USA, Australia)"
+originais = [{ arquivo = "*.gba", descricao = "ROM do Pokémon Mystery Dungeon Red (EUA)", sha1 = ["9f4cfc5b5f4859d17169a485462e977c7aac2b89"] }]
+
+[[jogo]]
+id = "pokemon-diamond"
+nome = "Pokémon Diamond"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "Sinnoh, Dialga e o Poké-relógio na tela de baixo, que responde ao toque."
+decomp = "https://github.com/pret/pokediamond"
+capa = "Nintendo - Nintendo DS/Pokemon - Diamond Version (USA) (Rev 5)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Pokémon Diamond (EUA)", sha1 = ["a46233d8b79a69ea87aa295a0efad5237d02841e"] }]
+
+[[jogo]]
+id = "pokemon-pearl"
+nome = "Pokémon Pearl"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "Sinnoh pela versão Pearl, com Palkia."
+decomp = "https://github.com/pret/pokediamond"
+capa = "Nintendo - Nintendo DS/Pokemon - Pearl Version (USA) (Rev 5)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Pokémon Pearl (EUA)", sha1 = ["99083bf15ec7c6b81b4ba241ee10abd9e80999ac"] }]
+
+[[jogo]]
+id = "pokemon-platinum"
+nome = "Pokémon Platinum"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "A versão definitiva de Sinnoh, com o Distortion World e Giratina."
+decomp = "https://github.com/pret/pokeplatinum"
+capa = "Nintendo - Nintendo DS/Pokemon - Platinum Version (USA)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Pokémon Platinum (EUA, Rev 0 ou 1)", sha1 = ["ce81046eda7d232513069519cb2085349896dec7", "0862ec35b24de5c7e2dcb88c9eea0873110d755c"] }]
+
+[[jogo]]
+id = "pokemon-heartgold"
+nome = "Pokémon HeartGold"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "O remake de Gold, com o Pokémon da frente andando atrás de você."
+decomp = "https://github.com/pret/pokeheartgold"
+capa = "Nintendo - Nintendo DS/Pokemon - HeartGold Version (USA)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Pokémon HeartGold (EUA)", sha1 = ["4fcded0e2713dc03929845de631d0932ea2b5a37"] }]
+
+[[jogo]]
+id = "pokemon-soulsilver"
+nome = "Pokémon SoulSilver"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "O remake de Silver, com Johto e Kanto inteiros."
+decomp = "https://github.com/pret/pokeheartgold"
+capa = "Nintendo - Nintendo DS/Pokemon - SoulSilver Version (USA)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Pokémon SoulSilver (EUA)", sha1 = ["f8dc38ea20c17541a43b58c5e6d18c1732c7e582"] }]
+
+[[jogo]]
+id = "pokemon-md-sky"
+nome = "Pokémon Mystery Dungeon: Explorers of Sky"
+plataforma = "Nintendo DS"
+receita = "melonds"
+descricao = "O Mystery Dungeon mais completo, com a guilda e a história do tempo."
+decomp = "https://github.com/pret/pmd-sky"
+capa = "Nintendo - Nintendo DS/Pokemon Mystery Dungeon - Explorers of Sky (USA)"
+originais = [{ arquivo = "*.nds", descricao = "ROM do Explorers of Sky (EUA ou Europa)", sha1 = ["5fa96ca8d8dd6405d6cd2bad73ed68bc73a9d152", "c838a5adf1ed32d2da8454976e5b1a1aa189c139"] }]
+
+[[jogo]]
+id = "pokemon-snap"
+nome = "Pokémon Snap"
+plataforma = "Nintendo 64"
+tipo = "recomp"
+colecao = "Pokémon"
+descricao = "Safári fotográfico na Ilha Pokémon. Port nativo para PC por recompilação, sem emulador."
+decomp = "https://github.com/ethteck/pokemonsnap"
+projeto = "https://github.com/JackandBeans/Snap64Recomp"
+capa = "Nintendo - Nintendo 64/Pokemon Snap (USA)"
+saves = ["programa/**/saves/*", "~/.config/Snap64Recomp/**/*"]
+originais = [{ arquivo = "*.z64", descricao = "ROM americana do Pokémon Snap, formato .z64", sha1 = ["edc7c49cc568c045fe48be0d18011c30f393cbaf"] }]
+
+# ------------------------------------------------------------------ Resident Evil
+# A descompilação do RE4 na lista (adonis-singh/re4) é "matching" do protótipo
+# de debug de 2004 do GameCube: ela reconstrói os mesmos arquivos do disco, não
+# um port. Então o RE4 roda com o seu disco no Dolphin ou pela versão da Steam.
+
+[[jogo]]
+id = "re4"
+nome = "Resident Evil 4"
+plataforma = "GameCube"
+tipo = "emulador"
+colecao = "Resident Evil"
+descricao = "Leon vai à Espanha resgatar a filha do presidente. Os dois discos trocam sozinhos."
+decomp = "https://github.com/adonis-singh/re4"
+projeto = "https://github.com/dolphin-emu/dolphin"
+capa = "Nintendo - GameCube/Resident Evil 4 (USA) (Disc 1)"
+saves = [
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/*/Card A/*G4BE*",
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/MemoryCardA.*.raw",
+]
+originais = [
+  { arquivo = "re4-disco1.*", descricao = "dump do disco 1 (.iso, .rvz, .gcm ou .ciso)" },
+  { arquivo = "re4-disco2.*", descricao = "dump do disco 2 (.iso, .rvz, .gcm ou .ciso)" },
+]
+
+[[jogo]]
+id = "re4-steam"
+nome = "Resident Evil 4 (Steam)"
+plataforma = "PC"
+tipo = "pc"
+colecao = "Resident Evil"
+descricao = "A versão de PC de 2014 (Ultimate HD), rodando pelo Proton da Steam."
+decomp = "https://github.com/adonis-singh/re4"
+projeto = "https://store.steampowered.com/app/254700"
+capa = "Nintendo - GameCube/Resident Evil 4 (USA)"
+saves = [
+  "~/.local/share/Steam/userdata/*/254700/**/*",
+  "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/userdata/*/254700/**/*",
+]
+
+# ------------------------------------------------------------------ outros
 
 [[jogo]]
 id = "sm64"
 nome = "Super Mario 64"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "Port nativo com câmera melhorada, compilado da descompilação no seu PC."
 decomp = "https://github.com/n64decomp/sm64"
 projeto = "https://github.com/sm64pc/sm64ex"
 capa = "Nintendo - Nintendo 64/Super Mario 64 (USA)"
+saves = ["sm64_save_file.bin"]
 originais = [
-  { arquivo = "sm64.us.z64", descricao = "ROM americana (.z64) do seu cartucho", sha1 = ["9bef1128717f958171a4afac3ed78ee2bb4e86ce"] },
+  { arquivo = "*.z64", descricao = "ROM americana (.z64) do seu cartucho", sha1 = ["9bef1128717f958171a4afac3ed78ee2bb4e86ce"] },
 ]
 
 [[jogo]]
@@ -39,9 +337,12 @@ id = "soh"
 nome = "Zelda: Ocarina of Time"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "Ship of Harkinian: port nativo com widescreen, 60 FPS e randomizer."
 decomp = "https://github.com/zeldaret/oot"
 projeto = "https://github.com/HarbourMasters/Shipwright"
 capa = "Nintendo - Nintendo 64/Legend of Zelda, The - Ocarina of Time (USA)"
+saves = ["Save/**/*", "*.sav"]
 originais = [
   { arquivo = "oot.z64", descricao = "ROM do Ocarina of Time (versões aceitas em docs/supportedHashes.json do Shipwright)" },
 ]
@@ -51,9 +352,12 @@ id = "2ship"
 nome = "Zelda: Majora's Mask"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "2 Ship 2 Harkinian: port nativo de Majora's Mask."
 decomp = "https://github.com/zeldaret/mm"
 projeto = "https://github.com/HarbourMasters/2ship2harkinian"
 capa = "Nintendo - Nintendo 64/Legend of Zelda, The - Majora's Mask (USA)"
+saves = ["Save/**/*", "*.sav"]
 originais = [
   { arquivo = "mm.z64", descricao = "ROM americana do Majora's Mask (versões aceitas em docs/supportedHashes.json do 2ship2harkinian)" },
 ]
@@ -63,9 +367,12 @@ id = "starship"
 nome = "Star Fox 64"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "Starship: port nativo de Star Fox 64."
 decomp = "https://github.com/sonicdcer/sf64"
 projeto = "https://github.com/HarbourMasters/Starship"
 capa = "Nintendo - Nintendo 64/Star Fox 64 (USA)"
+saves = ["Save/**/*", "*.sav"]
 originais = [
   { arquivo = "sf64.z64", descricao = "ROM do Star Fox 64 (US 1.0 recomendada)" },
 ]
@@ -75,9 +382,12 @@ id = "spaghettikart"
 nome = "Mario Kart 64"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "SpaghettiKart: port nativo de Mario Kart 64."
 decomp = "https://github.com/n64decomp/mk64"
 projeto = "https://github.com/HarbourMasters/SpaghettiKart"
 capa = "Nintendo - Nintendo 64/Mario Kart 64 (USA)"
+saves = ["Save/**/*", "*.sav"]
 originais = [
   { arquivo = "mk64.z64", descricao = "ROM americana do Mario Kart 64" },
 ]
@@ -87,9 +397,12 @@ id = "perfect-dark"
 nome = "Perfect Dark"
 plataforma = "Nintendo 64"
 tipo = "port"
+colecao = "Nintendo 64"
+descricao = "Port nativo de Perfect Dark, compilado da descompilação."
 decomp = "https://github.com/n64decomp/perfect_dark"
 projeto = "https://github.com/fgsfdsfgs/perfect_dark"
 capa = "Nintendo - Nintendo 64/Perfect Dark (USA) (Rev 1)"
+saves = ["src/build/**/*.bin"]
 originais = [
   { arquivo = "pd.ntsc-final.z64", descricao = "ROM americana V1.1 (Rev 1) do Perfect Dark" },
 ]
@@ -99,8 +412,11 @@ id = "devilutionx"
 nome = "Diablo"
 plataforma = "PC (1996)"
 tipo = "port"
+descricao = "DevilutionX: Diablo e Hellfire com melhorias. Anda e ataca tocando na tela."
 decomp = "https://github.com/diasurgical/devilution"
 projeto = "https://github.com/diasurgical/DevilutionX"
+controles = ["toque", "controle"]
+saves = ["~/.var/app/org.diasurgical.DevilutionX/data/diasurgical/devilution/*.sv"]
 originais = [
   { arquivo = "DIABDAT.MPQ", descricao = "do CD ou da instalação GOG; sem ele roda a demo (shareware)", opcional = true },
 ]
@@ -110,9 +426,14 @@ id = "metroid-prime"
 nome = "Metroid Prime"
 plataforma = "GameCube"
 tipo = "emulador"
+descricao = "Samus em primeira pessoa em Tallon IV, no emulador Dolphin."
 decomp = "https://github.com/primedecomp/prime"
 projeto = "https://github.com/dolphin-emu/dolphin"
 capa = "Nintendo - GameCube/Metroid Prime (USA)"
+saves = [
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/*/Card A/*GM8E*",
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/MemoryCardA.*.raw",
+]
 originais = [
   { arquivo = "metroid-prime.*", descricao = "dump do seu disco (.iso, .rvz, .gcm ou .ciso)" },
 ]
