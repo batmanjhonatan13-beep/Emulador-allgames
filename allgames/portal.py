@@ -6,6 +6,7 @@ Moonlight, escolhe o jogo pela capa (tocando ou com o controle) e o jogo abre no
 PC. Ao fechar o jogo, você volta para o portal.
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -19,7 +20,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import caminhos, capas, downloads, lojas, portmaster, saves, supervisor, windows
+from . import caminhos, capas, downloads, lojas, portmaster, saves, sistemas, supervisor, windows
 from .catalogo import Jogo, verificar
 
 # Cada sessão do AllGames no mesmo PC (Docker com rede do host) usa uma porta: ALLGAMES_PORTA.
@@ -80,6 +81,27 @@ def descrever(
         "ultimo_save": _data(saves.ultimo_save(jogo, pastas)),
         "jogado_em": _data(jogo.jogado_em),
     }
+
+
+def versao_da_biblioteca() -> str:
+    """Muda quando entra ou sai um jogo das pastas: o portal confere de tempos em tempos e só
+    recarrega a lista (que lê milhares de ROMs) quando ela mudou."""
+    partes = []
+    for raiz in (sistemas.roms_dir(), portmaster.pasta_ports()):
+        if not raiz.is_dir():
+            continue
+        # As ROMs ficam até 2 níveis dentro da pasta do console: basta olhar as pastas.
+        pastas = [raiz]
+        for pasta in raiz.iterdir():
+            if pasta.is_dir():
+                pastas.append(pasta)
+                pastas += [sub for sub in pasta.iterdir() if sub.is_dir()]
+        for pasta in pastas:
+            try:
+                partes.append(f"{pasta}:{pasta.stat().st_mtime_ns}")
+            except OSError:
+                continue
+    return hashlib.sha1("|".join(partes).encode()).hexdigest()[:16]
 
 
 class Partida:
@@ -203,10 +225,13 @@ class Handler(BaseHTTPRequestHandler):
                     "jogando": self.server.partida.jogo,
                     "pode_sair": bool(self.server.ao_sair),
                     "downloads_ativos": sum(d["estado"] == "baixando" for d in baixando.values()),
+                    "versao": versao_da_biblioteca(),
                 }
             )
         elif caminho == "/api/downloads":
             self._json({"downloads": self.server.downloads.lista(), "discos": downloads.discos()})
+        elif caminho == "/api/versao":
+            self._json({"versao": versao_da_biblioteca()})
         elif caminho == "/api/estado":
             self._json({"jogando": self.server.partida.jogo})
         elif caminho == "/capa":

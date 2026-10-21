@@ -91,7 +91,8 @@ services:
       PGID: ${PGID:-1000}
       STEAM_HEADLESS_SESSION_MODE: ${MODO:-desktop}
       ENABLE_STEAM_SYSTEMD_SERVICE: "true"
-      ALLGAMES_TOQUE: ${TOQUE:-sim}
+      # Bom para jogar no próprio PC (Moonlight do PC) com teclado e mouse.
+      ALLGAMES_TOQUE: ${TOQUE_2:-sim}
       # Portas próprias: as da primeira sessão já estão em uso (rede do host).
       ALLGAMES_PORTA: "47801"
       ALLGAMES_SUNSHINE_PORTA: "48989"

@@ -99,6 +99,20 @@ class Portal(unittest.TestCase):
         self.assertEqual(self._pedir("/api/desinstalar?id=a", "POST")[0], 409)
 
 
+class JogoNovoAparece(unittest.TestCase):
+    def test_versao_muda_quando_entra_um_jogo_nas_pastas(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ALLGAMES_HOME": tmp}):
+            roms = portal.sistemas.roms_dir()
+            (roms / "snes/hacks").mkdir(parents=True)
+            antes = portal.versao_da_biblioteca()
+            self.assertEqual(portal.versao_da_biblioteca(), antes, "nada mudou")
+            (roms / "snes/Zoop.sfc").write_bytes(b"rom")
+            depois = portal.versao_da_biblioteca()
+            self.assertNotEqual(depois, antes)
+            (roms / "snes/hacks/Mario Hack.sfc").write_bytes(b"rom")
+            self.assertNotEqual(portal.versao_da_biblioteca(), depois, "jogo numa subpasta também conta")
+
+
 class ControlesDeMentira:
     """Sequência de leituras: cada item diz se Select+Start está apertado naquele instante."""
 

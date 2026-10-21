@@ -811,6 +811,7 @@ async function carregar() {
   try {
     const dados = await api("/api/jogos");
     estado.jogos = dados.jogos;
+    estado.versao = dados.versao;
     estado.podeSair = dados.pode_sair;
     const contagem = $("#contagem-downloads");
     contagem.hidden = !dados.downloads_ativos;
@@ -827,6 +828,18 @@ async function carregar() {
     mensagem(`Não consegui falar com o AllGames no PC: ${erro.message}`);
   }
 }
+
+// Jogo novo copiado para a pasta aparece sozinho: a cada 15 s o portal confere se as pastas
+// mudaram (uma conta rápida no PC) e só então recarrega a lista. Não confere durante o jogo.
+setInterval(async () => {
+  if (estado.jogando || document.hidden || camadaAberta()) return;
+  try {
+    const { versao } = await api("/api/versao");
+    if (estado.versao && versao !== estado.versao) await carregar();
+  } catch {
+    // o PC pode estar ocupado; confere de novo daqui a pouco
+  }
+}, 15000);
 
 definirControle(false);
 relogio();
