@@ -43,6 +43,14 @@ def _capa(jogo: Jogo) -> str | None:
     return None
 
 
+def no_portal(jogo: Jogo) -> bool:
+    """Os jogos descompilados do catálogo que ainda precisam do arquivo original não aparecem:
+    só enchiam a lista de "Falta o jogo". Eles aparecem quando o original está no PC."""
+    if jogo.origem == "catalogo" and not jogo.instalado:
+        return all(v.ok for v in verificar(jogo))
+    return True
+
+
 def acoes(jogo: Jogo) -> list[str]:
     """O que o portal pode fazer com o jogo."""
     if jogo.origem != "catalogo":
@@ -218,6 +226,7 @@ class Handler(BaseHTTPRequestHandler):
             jogos = [
                 descrever(j, tarefas.situacao(j.id), baixando.get(j.id), pastas)
                 for j in self.server.atualizar().values()
+                if no_portal(j)
             ]
             self._json(
                 {
@@ -399,6 +408,10 @@ def _preparar_firefox(perfil: Path) -> None:
         "toolkit.telemetry.reportingpolicy.firstRun": False,
         "trailhead.firstrun.didSeeAboutWelcome": True,
         "dom.gamepad.enabled": True,
+        # Desenhar pela placa de vídeo: sem isso, no container a tela fica lenta (tudo pela CPU).
+        "gfx.webrender.all": True,
+        "layers.acceleration.force-enabled": True,
+        "widget.dmabuf.force-enabled": True,
     }
     linhas = [f"user_pref({json.dumps(k)}, {json.dumps(v)});" for k, v in preferencias.items()]
     (perfil / "user.js").write_text("\n".join(linhas) + "\n")

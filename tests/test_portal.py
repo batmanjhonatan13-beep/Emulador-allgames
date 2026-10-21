@@ -99,6 +99,19 @@ class Portal(unittest.TestCase):
         self.assertEqual(self._pedir("/api/desinstalar?id=a", "POST")[0], 409)
 
 
+class SoOQueDaParaJogar(unittest.TestCase):
+    def test_jogo_do_catalogo_sem_o_original_some_da_lista(self):
+        falta = mock.Mock(ok=False)
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ALLGAMES_HOME": tmp}):
+            sem_original = Jogo("starship", "Star Fox 64", "Nintendo 64", "port")
+            with mock.patch.object(portal, "verificar", return_value=[falta]):
+                self.assertFalse(portal.no_portal(sem_original))
+            with mock.patch.object(portal, "verificar", return_value=[]):
+                self.assertTrue(portal.no_portal(sem_original), "com o original no PC ele aparece")
+            rom = Jogo("rom:snes/Zoop.sfc", "Zoop", "SNES", "emulador", origem="rom")
+            self.assertTrue(portal.no_portal(rom))
+
+
 class JogoNovoAparece(unittest.TestCase):
     def test_versao_muda_quando_entra_um_jogo_nas_pastas(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ALLGAMES_HOME": tmp}):

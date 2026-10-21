@@ -222,7 +222,7 @@ function linhaSave(jogo) {
   );
 }
 
-const LIMITE_FILEIRA = 30;
+const LIMITE_FILEIRA = 20;
 const PAGINA_GRADE = 120;
 
 function fileira(titulo, jogos, filtro = null) {
@@ -254,8 +254,13 @@ function fileira(titulo, jogos, filtro = null) {
   );
 }
 
+// Ports do PortMaster ainda não instalados só aparecem no filtro PortMaster (a "loja" deles).
+function naLista(jogo) {
+  return jogo.origem !== "portmaster" || jogo.instalado || Boolean(jogo.tarefa);
+}
+
 function renderizarFileiras() {
-  const jogos = estado.jogos;
+  const jogos = estado.jogos.filter(naLista);
   const jogados = jogos.filter((j) => j.instalado && j.jogado_em).sort((a, b) => b.jogado_em.localeCompare(a.jogado_em));
   // Coleções com mais jogos prontos primeiro: o que você já pode jogar fica no alto.
   const prontos = (c) => jogos.filter((j) => j.colecao === c && j.instalado).length;
@@ -337,7 +342,11 @@ function renderizarBiblioteca() {
     ),
   );
   const termo = normalizar(estado.busca);
-  const jogos = estado.jogos.filter(atual[2]).filter((j) => !termo || normalizar(`${j.nome} ${j.plataforma}`).includes(termo));
+  const loja = atual[0] === "c:PortMaster" || atual[0] === "p:PortMaster";
+  const jogos = estado.jogos
+    .filter((j) => loja || naLista(j))
+    .filter(atual[2])
+    .filter((j) => !termo || j.busca.includes(termo));
   if (!jogos.length) return $("#grade").replaceChildren(el("p", { class: "vazio" }, "Nenhum jogo aqui."));
   // Com milhares de ROMs, desenhar tudo de uma vez trava a tela e a navegação pelo controle.
   const limite = Math.max(estado.limiteGrade, PAGINA_GRADE);
@@ -845,10 +854,15 @@ function acaoDownload(download, acao) {
 
 // ---------------------------------------------------------------- início
 
+// Espera um instante depois da última letra para redesenhar a grade (digitar rápido não trava).
+let temporizadorBusca;
 $("#busca").addEventListener("input", (evento) => {
-  estado.busca = evento.target.value;
-  estado.limiteGrade = 0;
-  renderizarBiblioteca();
+  clearTimeout(temporizadorBusca);
+  temporizadorBusca = setTimeout(() => {
+    estado.busca = evento.target.value;
+    estado.limiteGrade = 0;
+    renderizarBiblioteca();
+  }, 150);
 });
 // Mouse ou toque na busca: digita pelo teclado de verdade. O controle abre o teclado na tela (acao "a").
 $("#busca").addEventListener("click", (evento) => evento.target.focus());
@@ -874,6 +888,8 @@ let temporizadorTarefas;
 async function carregar() {
   try {
     const dados = await api("/api/jogos");
+    // O texto de busca de cada jogo é calculado uma vez, não a cada letra digitada.
+    for (const jogo of dados.jogos) jogo.busca = normalizar(`${jogo.nome} ${jogo.plataforma}`);
     estado.jogos = dados.jogos;
     estado.versao = dados.versao;
     estado.podeSair = dados.pode_sair;
