@@ -1,4 +1,4 @@
-﻿<#
+<#
   AllGames no Windows: instala e configura tudo para jogar os emuladores pelo celular.
 
   Como usar: abra o PowerShell (menu Iniciar > digite PowerShell) e cole:
