@@ -1,0 +1,11 @@
+[project]
+name = "allgames"
+version = "0.1.0"
+description = "Cloud gaming pessoal: jogos descompilados rodando no seu PC e transmitidos para o celular"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

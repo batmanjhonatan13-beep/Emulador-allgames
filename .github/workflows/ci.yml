@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testes
+        run: python -m unittest discover -s tests -t . -v
+      - name: Ruff
+        run: pipx run ruff check . && pipx run ruff format --check .
+      - name: ShellCheck
+        run: |
+          shellcheck -x scripts/*.sh
+          cd receitas && shellcheck -s bash ./*.sh

@@ -1,0 +1,3 @@
+# As receitas sempre rodam com `set -euo pipefail` (veja allgames/receitas.py),
+# então um `cd` que falha já encerra a receita.
+disable=SC2164

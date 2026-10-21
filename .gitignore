@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+
+# Nunca versione arquivos de jogos: eles ficam em ~/AllGames/originais.
+*.z64
+*.n64
+*.v64
+*.iso
+*.rvz
+*.gcm
+*.ciso
+*.wbfs
+*.chd
+*.mpq
+*.MPQ
+*.rsdk
+*.xex
+*.o2r
+*.otr

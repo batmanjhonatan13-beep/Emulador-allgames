@@ -1,0 +1,118 @@
+# Catálogo de jogos do AllGames.
+#
+# Cada [[jogo]] vira um "app" no Sunshine e aparece no Moonlight do celular
+# depois de `allgames instalar <id>` e `allgames sincronizar`.
+#
+# Campos:
+#   id          identificador curto; precisa existir receitas/<id>.sh
+#   nome        nome que aparece no celular
+#   plataforma  console original
+#   tipo        "port"      -> port nativo para PC feito a partir da descompilação
+#               "recomp"    -> recompilação estática do binário original
+#               "emulador"  -> descompilação só "matching" (gera a ROM igual à
+#                              original), então o jogo roda em emulador
+#   decomp      repositório da descompilação (da lista SamidyFR/Game-Decompilations)
+#   projeto     repositório usado de fato para gerar o executável
+#   capa        "Sistema/Nome" do acervo libretro-thumbnails (opcional);
+#               um PNG em capas/<id>.png tem prioridade
+#   originais   arquivos do SEU jogo original que precisam estar em
+#               ~/AllGames/originais. `arquivo` aceita curingas (*) e não
+#               diferencia maiúsculas. `sha1` (opcional) lista os hashes aceitos.
+#               `opcional = true` quando o jogo roda sem eles (ex.: demo).
+#
+# Nada aqui baixa ROMs ou dados de jogos: você fornece a cópia que já tem.
+
+[[jogo]]
+id = "sm64"
+nome = "Super Mario 64"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/n64decomp/sm64"
+projeto = "https://github.com/sm64pc/sm64ex"
+capa = "Nintendo - Nintendo 64/Super Mario 64 (USA)"
+originais = [
+  { arquivo = "sm64.us.z64", descricao = "ROM americana (.z64) do seu cartucho", sha1 = ["9bef1128717f958171a4afac3ed78ee2bb4e86ce"] },
+]
+
+[[jogo]]
+id = "soh"
+nome = "Zelda: Ocarina of Time"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/zeldaret/oot"
+projeto = "https://github.com/HarbourMasters/Shipwright"
+capa = "Nintendo - Nintendo 64/Legend of Zelda, The - Ocarina of Time (USA)"
+originais = [
+  { arquivo = "oot.z64", descricao = "ROM do Ocarina of Time (versões aceitas em docs/supportedHashes.json do Shipwright)" },
+]
+
+[[jogo]]
+id = "2ship"
+nome = "Zelda: Majora's Mask"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/zeldaret/mm"
+projeto = "https://github.com/HarbourMasters/2ship2harkinian"
+capa = "Nintendo - Nintendo 64/Legend of Zelda, The - Majora's Mask (USA)"
+originais = [
+  { arquivo = "mm.z64", descricao = "ROM americana do Majora's Mask (versões aceitas em docs/supportedHashes.json do 2ship2harkinian)" },
+]
+
+[[jogo]]
+id = "starship"
+nome = "Star Fox 64"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/sonicdcer/sf64"
+projeto = "https://github.com/HarbourMasters/Starship"
+capa = "Nintendo - Nintendo 64/Star Fox 64 (USA)"
+originais = [
+  { arquivo = "sf64.z64", descricao = "ROM do Star Fox 64 (US 1.0 recomendada)" },
+]
+
+[[jogo]]
+id = "spaghettikart"
+nome = "Mario Kart 64"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/n64decomp/mk64"
+projeto = "https://github.com/HarbourMasters/SpaghettiKart"
+capa = "Nintendo - Nintendo 64/Mario Kart 64 (USA)"
+originais = [
+  { arquivo = "mk64.z64", descricao = "ROM americana do Mario Kart 64" },
+]
+
+[[jogo]]
+id = "perfect-dark"
+nome = "Perfect Dark"
+plataforma = "Nintendo 64"
+tipo = "port"
+decomp = "https://github.com/n64decomp/perfect_dark"
+projeto = "https://github.com/fgsfdsfgs/perfect_dark"
+capa = "Nintendo - Nintendo 64/Perfect Dark (USA) (Rev 1)"
+originais = [
+  { arquivo = "pd.ntsc-final.z64", descricao = "ROM americana V1.1 (Rev 1) do Perfect Dark" },
+]
+
+[[jogo]]
+id = "devilutionx"
+nome = "Diablo"
+plataforma = "PC (1996)"
+tipo = "port"
+decomp = "https://github.com/diasurgical/devilution"
+projeto = "https://github.com/diasurgical/DevilutionX"
+originais = [
+  { arquivo = "DIABDAT.MPQ", descricao = "do CD ou da instalação GOG; sem ele roda a demo (shareware)", opcional = true },
+]
+
+[[jogo]]
+id = "metroid-prime"
+nome = "Metroid Prime"
+plataforma = "GameCube"
+tipo = "emulador"
+decomp = "https://github.com/primedecomp/prime"
+projeto = "https://github.com/dolphin-emu/dolphin"
+capa = "Nintendo - GameCube/Metroid Prime (USA)"
+originais = [
+  { arquivo = "metroid-prime.*", descricao = "dump do seu disco (.iso, .rvz, .gcm ou .ciso)" },
+]
