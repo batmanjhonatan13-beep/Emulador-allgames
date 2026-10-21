@@ -7,7 +7,8 @@ const ICONES = {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a5 5 0 0 1 4.6 7l-.6 1.4a2.6 2.6 0 0 1-4.3.7L15 15H9l-1.7 2.1a2.6 2.6 0 0 1-4.3-.7L2.4 15A5 5 0 0 1 7 8z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6"/><circle cx="18" cy="13.5" r=".6"/></svg>',
   toque:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5a1.5 1.5 0 0 1 3 0V11m0-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.6a6 6 0 0 1-4.8-2.4L4.3 15.6a1.5 1.5 0 0 1 2.3-1.9L9 16"/></svg>',
-  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
+  play: '<svg class="cheio" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
+  baixar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg>',
   disco:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>',
 };
@@ -88,13 +89,14 @@ function arte(jogo, classe = "arte") {
   let matiz = 0;
   for (const c of jogo.id) matiz = (matiz * 31 + c.charCodeAt(0)) % 360;
   const caixa = el("div", { class: classe, style: `--matiz:${matiz}` }, el("span", { class: "iniciais" }, iniciais));
-  if (jogo.capa) {
-    const img = el("img", { src: jogo.capa, alt: "", loading: "lazy", decoding: "async" });
+  const fontes = [jogo.capa, jogo.capa_alternativa].filter(Boolean);
+  if (fontes.length) {
+    const img = el("img", { src: fontes.shift(), alt: "", loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
     img.addEventListener("load", () => {
-      caixa.style.setProperty("--capa", `url("${jogo.capa}")`);
+      caixa.style.setProperty("--capa", `url("${img.src}")`);
       caixa.classList.add("com-capa");
     });
-    img.addEventListener("error", () => img.remove());
+    img.addEventListener("error", () => (fontes.length ? (img.src = fontes.shift()) : img.remove()));
     caixa.append(img);
   }
   return caixa;
@@ -110,6 +112,17 @@ function selosControles(jogo, comTexto = false) {
   );
 }
 
+function etiqueta(jogo) {
+  let texto = null;
+  if (jogo.tarefa === "instalando") texto = "Instalando…";
+  else if (jogo.tarefa === "erro") texto = "Erro ao instalar";
+  else if (jogo.instalado) return null;
+  else if (jogo.origem === "rom") texto = "Falta o emulador";
+  else if (jogo.origem !== "catalogo") texto = "Instalar";
+  else texto = jogo.falta.length ? "Falta o jogo" : "Instalar no PC";
+  return el("span", { class: `etiqueta${jogo.tarefa === "instalando" ? " etiqueta-ativa" : ""}` }, texto);
+}
+
 function cartao(jogo) {
   return el(
     "button",
@@ -121,7 +134,7 @@ function cartao(jogo) {
       onclick: () => abrirDetalhe(jogo),
     },
     arte(jogo),
-    jogo.instalado ? null : el("span", { class: "etiqueta" }, jogo.falta.length ? "Falta o jogo" : "Instalar no PC"),
+    etiqueta(jogo),
     jogo.ultimo_save ? el("span", { class: "etiqueta etiqueta-save", html: ICONES.disco }) : null,
     el(
       "span",
@@ -159,9 +172,9 @@ function renderizarDestaque() {
     return;
   }
   caixa.style.setProperty("--capa", jogo.capa ? `url("${jogo.capa}")` : "none");
-  const acao = jogo.instalado
+  const acao = jogo.acoes.includes("jogar")
     ? el("button", { class: "botao primario", "data-nav": true, onclick: () => jogar(jogo), html: `${ICONES.play} Jogar` })
-    : el("button", { class: "botao", "data-nav": true, onclick: () => abrirDetalhe(jogo) }, "Como instalar");
+    : el("button", { class: "botao", "data-nav": true, onclick: () => abrirDetalhe(jogo) }, "Como jogar");
   caixa.append(
     arte(jogo, "arte arte-destaque"),
     el(
@@ -169,7 +182,7 @@ function renderizarDestaque() {
       { class: "destaque-texto" },
       el("span", { class: "sobretitulo" }, jogo.jogado_em ? "Continue jogando" : jogo.instalado ? "Pronto para jogar" : "No catálogo"),
       el("h1", {}, jogo.nome),
-      el("p", { class: "linha-info" }, [jogo.plataforma, jogo.tipo, jogo.colecao].filter(Boolean).join(" · ")),
+      el("p", { class: "linha-info" }, linhaInfo(jogo)),
       jogo.descricao ? el("p", { class: "descricao" }, jogo.descricao) : null,
       linhaSave(jogo),
       el(
@@ -183,6 +196,10 @@ function renderizarDestaque() {
   );
 }
 
+function linhaInfo(jogo) {
+  return [...new Set([jogo.plataforma, jogo.tipo, jogo.colecao].filter(Boolean))].join(" · ");
+}
+
 function linhaSave(jogo) {
   const ultimo = quando(jogo.ultimo_save);
   if (!jogo.instalado) return null;
@@ -193,25 +210,47 @@ function linhaSave(jogo) {
   );
 }
 
-function fileira(titulo, jogos) {
+const LIMITE_FILEIRA = 30;
+
+function fileira(titulo, jogos, filtro = null) {
   if (!jogos.length) return null;
+  const mais =
+    filtro && jogos.length > LIMITE_FILEIRA
+      ? el(
+          "button",
+          {
+            class: "cartao cartao-mais",
+            "data-nav": true,
+            onclick: () => {
+              estado.filtro = filtro;
+              renderizarBiblioteca();
+              trocarAba("biblioteca");
+              focar($(`[data-filtro="${CSS.escape(filtro)}"]`), false);
+            },
+          },
+          el("span", { class: "arte" }, el("span", { class: "iniciais" }, `+${jogos.length - LIMITE_FILEIRA}`)),
+          el("span", { class: "legenda" }, el("span", { class: "nome" }, "Ver todos")),
+        )
+      : null;
   return el(
     "section",
     { class: "fileira" },
     el("h2", {}, titulo, el("span", { class: "contagem" }, String(jogos.length))),
-    el("div", { class: "trilho" }, jogos.map(cartao)),
+    el("div", { class: "trilho" }, jogos.slice(0, filtro ? LIMITE_FILEIRA : jogos.length).map(cartao), mais),
   );
 }
 
 function renderizarFileiras() {
   const jogos = estado.jogos;
   const jogados = jogos.filter((j) => j.instalado && j.jogado_em).sort((a, b) => b.jogado_em.localeCompare(a.jogado_em));
-  const colecoes = [...new Set(jogos.map((j) => j.colecao).filter(Boolean))];
+  // Coleções com mais jogos prontos primeiro: o que você já pode jogar fica no alto.
+  const prontos = (c) => jogos.filter((j) => j.colecao === c && j.instalado).length;
+  const colecoes = [...new Set(jogos.map((j) => j.colecao).filter(Boolean))].sort((a, b) => (prontos(b) > 0) - (prontos(a) > 0));
   $("#fileiras").replaceChildren(
     ...[
-      fileira("Continue jogando", jogados),
-      fileira("Prontos para jogar", jogos.filter((j) => j.instalado)),
-      ...colecoes.map((c) => fileira(c, jogos.filter((j) => j.colecao === c))),
+      fileira("Continue jogando", jogados.slice(0, LIMITE_FILEIRA)),
+      fileira("Prontos para jogar", jogos.filter((j) => j.instalado), "instalados"),
+      ...colecoes.map((c) => fileira(c, jogos.filter((j) => j.colecao === c), `c:${c}`)),
       fileira("Outros jogos", jogos.filter((j) => !j.colecao)),
     ].filter(Boolean),
   );
@@ -219,18 +258,26 @@ function renderizarFileiras() {
 
 function filtros() {
   const plataformas = [...new Set(estado.jogos.map((j) => j.plataforma))];
+  const colecoes = [...new Set(estado.jogos.map((j) => j.colecao).filter((c) => c && !plataformas.includes(c)))];
+  const tem = (f) => estado.jogos.some(f);
+  const loja = (j) => j.origem === "steam" || j.origem === "heroic";
   return [
     ["todos", "Todos", () => true],
     ["instalados", "Instalados", (j) => j.instalado],
     ["toque", "Jogáveis no toque", (j) => j.controles.includes("toque")],
     ["controle", "Com controle", (j) => j.controles.includes("controle")],
+    tem(loja) ? ["lojas", "Steam e lojas", loja] : null,
+    tem((j) => j.origem === "rom") ? ["roms", "ROMs", (j) => j.origem === "rom"] : null,
+    ...colecoes.map((c) => [`c:${c}`, c, (j) => j.colecao === c]),
     ...plataformas.map((p) => [`p:${p}`, p, (j) => j.plataforma === p]),
-  ];
+  ].filter(Boolean);
 }
 
 function renderizarBiblioteca() {
   const lista = filtros();
-  const atual = lista.find(([id]) => id === estado.filtro) || lista[0];
+  // "c:<nome>" de uma coleção que também é plataforma vira o filtro da plataforma.
+  const pedido = estado.filtro.startsWith("c:") && !lista.some(([id]) => id === estado.filtro) ? `p:${estado.filtro.slice(2)}` : estado.filtro;
+  const atual = lista.find(([id]) => id === pedido) || lista[0];
   $("#filtros").replaceChildren(
     ...lista.map(([id, nome]) =>
       el(
@@ -292,15 +339,6 @@ function abrirDetalhe(jogo) {
     : jogo.controles.includes("controle")
       ? "Dá para jogar tocando direto na tela ou com controle."
       : "Dá para jogar tocando direto na tela.";
-  const pendencia = jogo.instalado
-    ? null
-    : el(
-        "div",
-        { class: "pendencia" },
-        jogo.falta.length ? el("p", {}, `Falta o jogo original: ${jogo.falta.join("; ")}.`) : null,
-        el("p", {}, "No PC, rode:"),
-        el("code", {}, `allgames instalar ${jogo.id}`),
-      );
   abrirCamada(
     "detalhe",
     el(
@@ -311,19 +349,68 @@ function abrirDetalhe(jogo) {
         "div",
         { class: "detalhe-texto" },
         el("h1", {}, jogo.nome),
-        el("p", { class: "linha-info" }, [jogo.plataforma, jogo.tipo, jogo.colecao].filter(Boolean).join(" · ")),
+        el("p", { class: "linha-info" }, linhaInfo(jogo)),
         jogo.descricao ? el("p", { class: "descricao" }, jogo.descricao) : null,
         el("p", { class: "controles-info" }, selosControles(jogo, true), el("span", {}, explicacao)),
         linhaSave(jogo),
-        pendencia,
-        el(
-          "div",
-          { class: "acoes" },
-          jogo.instalado
-            ? el("button", { class: "botao primario", "data-nav": true, "data-autofoco": true, onclick: () => jogar(jogo), html: `${ICONES.play} Jogar` })
-            : null,
-          el("button", { class: "botao", "data-nav": true, onclick: () => fecharCamada() }, "Voltar"),
-        ),
+        pendencia(jogo),
+        el("div", { class: "acoes" }, botoesDeAcao(jogo), el("button", { class: "botao", "data-nav": true, onclick: () => fecharCamada() }, "Voltar")),
+      ),
+    ),
+  );
+}
+
+function pendencia(jogo) {
+  const linhas = [];
+  if (jogo.tarefa === "instalando") linhas.push(el("p", {}, "Instalando no PC… a tela atualiza sozinha quando terminar."));
+  if (jogo.tarefa === "erro") linhas.push(el("p", {}, "A instalação falhou. No PC, veja ~/AllGames/logs/instalacoes.log."));
+  if (!jogo.instalado && jogo.origem === "catalogo") {
+    if (jogo.falta.length) linhas.push(el("p", {}, `Falta o jogo original: ${jogo.falta.join("; ")}.`));
+    if (!jogo.acoes.length) linhas.push(el("p", {}, "Depois de colocar o arquivo, instale aqui ou no PC com:"), el("code", {}, `allgames instalar ${jogo.id}`));
+  }
+  if (!jogo.instalado && jogo.pendente) linhas.push(el("p", {}, `Para jogar: ${jogo.pendente}.`));
+  if (jogo.aviso) linhas.push(el("p", {}, jogo.aviso));
+  return linhas.length ? el("div", { class: "pendencia" }, linhas) : null;
+}
+
+function botoesDeAcao(jogo) {
+  const botoes = [];
+  if (jogo.acoes.includes("jogar")) {
+    botoes.push(el("button", { class: "botao primario", "data-nav": true, "data-autofoco": true, onclick: () => jogar(jogo), html: `${ICONES.play} Jogar` }));
+  }
+  if (jogo.acoes.includes("instalar") && jogo.tarefa !== "instalando") {
+    const texto = jogo.origem === "rom" ? "Instalar o emulador" : "Instalar";
+    botoes.push(el("button", { class: "botao primario", "data-nav": true, "data-autofoco": true, onclick: () => executarAcao(jogo, "instalar"), html: `${ICONES.baixar} ${texto}` }));
+  }
+  if (jogo.acoes.includes("desinstalar")) {
+    botoes.push(el("button", { class: "botao perigo", "data-nav": true, onclick: () => confirmarDesinstalar(jogo) }, "Desinstalar"));
+  }
+  return botoes;
+}
+
+function executarAcao(jogo, acao) {
+  for (const camada of document.querySelectorAll(".camada:not(#jogando)")) camada.hidden = true;
+  api(`/api/${acao}?id=${encodeURIComponent(jogo.id)}`, "POST")
+    .then((resposta) => {
+      if (resposta.mensagem) mensagem(resposta.mensagem);
+      return carregar();
+    })
+    .catch((erro) => mensagem(`Não deu: ${erro.message}`));
+}
+
+function confirmarDesinstalar(jogo) {
+  abrirCamada(
+    "aviso",
+    el(
+      "div",
+      { class: "painel painel-aviso", role: "alertdialog" },
+      el("h2", {}, `Desinstalar ${jogo.nome}?`),
+      el("p", {}, "Os arquivos do jogo saem do PC. Saves na nuvem da loja continuam lá."),
+      el(
+        "div",
+        { class: "acoes" },
+        el("button", { class: "botao perigo", "data-nav": true, onclick: () => executarAcao(jogo, "desinstalar") }, "Desinstalar"),
+        el("button", { class: "botao", "data-nav": true, "data-autofoco": true, onclick: () => fecharCamada() }, "Cancelar"),
       ),
     ),
   );
@@ -351,7 +438,7 @@ function jogar(jogo, confirmado = false) {
     return;
   }
   for (const camada of document.querySelectorAll(".camada:not(#jogando)")) camada.hidden = true;
-  api(`/api/jogar/${encodeURIComponent(jogo.id)}`, "POST")
+  api(`/api/jogar?id=${encodeURIComponent(jogo.id)}`, "POST")
     .then(() => mostrarJogando(jogo))
     .catch((erro) => mensagem(`Não deu para abrir ${jogo.nome}: ${erro.message}`));
 }
@@ -543,12 +630,15 @@ function relogio() {
   $("#relogio").textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+let temporizadorTarefas;
 async function carregar() {
   try {
     const dados = await api("/api/jogos");
     estado.jogos = dados.jogos;
     estado.podeSair = dados.pode_sair;
     renderizar();
+    clearTimeout(temporizadorTarefas);
+    if (estado.jogos.some((j) => j.tarefa === "instalando")) temporizadorTarefas = setTimeout(carregar, 3000);
     if (dados.jogando && !estado.jogando) {
       const jogo = estado.jogos.find((j) => j.id === dados.jogando);
       if (jogo) mostrarJogando(jogo);

@@ -1,10 +1,11 @@
 """Linha de comando do AllGames."""
 
 import argparse
+import shutil
 import sys
 from datetime import datetime
 
-from . import caminhos, capas, catalogo, doutor, portal, receitas, saves, sunshine
+from . import biblioteca, caminhos, capas, catalogo, doutor, lojas, portal, receitas, saves, sistemas, sunshine
 
 
 def cmd_listar(jogos: list[catalogo.Jogo], args) -> int:
@@ -74,14 +75,24 @@ def cmd_instalar(jogos: list[catalogo.Jogo], args) -> int:
 
 
 def cmd_jogar(jogos: list[catalogo.Jogo], args) -> int:
-    jogo = catalogo.buscar(jogos, args.id)
+    jogo = biblioteca.buscar(args.id, jogos)
     if not jogo.instalado:
-        print(f"{jogo.nome} não está instalado. Rode: allgames instalar {jogo.id}", file=sys.stderr)
+        dica = jogo.extra.get("falta") or f"rode: allgames instalar {jogo.id}"
+        print(f"{jogo.nome} ainda não está pronto: {dica}", file=sys.stderr)
         return 1
+    argv = sistemas.comando(jogo) if jogo.origem == "rom" else None
+    if argv and not shutil.which(argv[0]):
+        raise RuntimeError(f"{argv[0]} não está instalado no PC")
     # Guarda os saves da partida anterior antes de abrir o jogo de novo.
     saves.fazer_backup(jogo)
+    jogo.pasta.mkdir(parents=True, exist_ok=True)
     (jogo.pasta / ".jogado").touch()
-    receitas.jogar(jogo, gamescope=args.gamescope)
+    if argv:
+        receitas.jogar_comando(jogo, argv, gamescope=args.gamescope)
+    elif jogo.origem in ("steam", "heroic"):
+        return lojas.jogar(jogo)
+    else:
+        receitas.jogar(jogo, gamescope=args.gamescope)
     return 0  # não chega aqui: o processo vira o jogo
 
 
@@ -114,8 +125,61 @@ def cmd_doutor(jogos, args) -> int:
     return doutor.executar()
 
 
+def cmd_roms(jogos, args) -> int:
+    dados = sistemas.carregar()
+    criadas = sistemas.preparar_pastas(dados)
+    if criadas:
+        print(f"Pastas criadas em {sistemas.roms_dir()} (os mesmos nomes do ArkOS).\n")
+    emuladores, lista = dados
+    print(f"{'PASTA':<16} {'SISTEMA':<22} {'ROMS':>5}  EMULADOR")
+    for sistema in lista:
+        quantidade = len(sistemas.roms(sistema))
+        emulador = emuladores[sistema.emulador]
+        ok, falta = sistemas.pronto(emulador, sistema)
+        situacao = "pronto" if ok else falta
+        if quantidade or args.todos:
+            print(f"{sistema.id:<16} {sistema.nome:<22} {quantidade:>5}  {emulador.nome}: {situacao}")
+    print(f"\nROMs em {sistemas.roms_dir()}/<pasta>, BIOS em {sistemas.bios_dir()}")
+    print("Instale os emuladores que faltam com: allgames emuladores instalar")
+    return 0
+
+
+def cmd_emuladores(jogos, args) -> int:
+    dados = sistemas.carregar()
+    emuladores, lista = dados
+    if args.acao == "instalar":
+        avisos = sistemas.instalar(args.alvos, dados)
+        for aviso in avisos:
+            print(f"! {aviso}")
+        print("✔ Pronto. As ROMs desses sistemas já podem ser abertas pelo portal.")
+        return 0
+    print(f"{'EMULADOR':<12} {'SITUAÇÃO':<10} SISTEMAS")
+    for chave, emulador in emuladores.items():
+        ok, _ = sistemas.pronto(emulador)
+        nomes = ", ".join(s.nome for s in lista if s.emulador == chave)
+        print(f"{chave:<12} {'pronto' if ok else 'falta':<10} {nomes}")
+        if emulador.aviso and not ok:
+            print(f"{'':<23} {emulador.aviso}")
+    return 0
+
+
+def cmd_lojas(jogos, args) -> int:
+    steam, heroic = lojas.steam_jogos(), lojas.heroic_jogos()
+    for nome, lista, dica in [
+        ("Steam", steam, "sem chave da Web API aparecem só os instalados (veja docs/LOJAS.md)"),
+        ("Heroic (Epic, GOG, Amazon)", heroic, "abra o Heroic e entre nas suas contas"),
+    ]:
+        instalados = sum(j.instalado for j in lista)
+        print(f"{nome}: {len(lista)} jogos, {instalados} instalados" + ("" if lista else f" — {dica}"))
+        if args.detalhes:
+            for jogo in lista:
+                print(f"  {'✔' if jogo.instalado else ' '} {jogo.nome}  ({jogo.id})")
+    return 0
+
+
 def cmd_portal(jogos: list[catalogo.Jogo], args) -> int:
-    return portal.servir(jogos, args.porta, args.publico, args.kiosk, args.gamescope)
+    # Lê catálogo, pastas de ROMs e lojas a cada atualização da tela: ROMs novas aparecem sozinhas.
+    return portal.servir(lambda: biblioteca.todos(), args.porta, args.publico, args.kiosk, args.gamescope)
 
 
 def _quando(timestamp: float | None) -> str:
@@ -204,6 +268,21 @@ def montar_parser() -> argparse.ArgumentParser:
     p.add_argument("--sem-reiniciar", action="store_true", help="não reinicia o serviço do Sunshine")
     p.set_defaults(func=cmd_sincronizar)
 
+    p = sub.add_parser("roms", help="pastas de ROMs por console (estilo ArkOS) e quantas ROMs há em cada")
+    p.add_argument("--todos", action="store_true", help="mostra também os sistemas sem ROMs")
+    p.set_defaults(func=cmd_roms)
+
+    p = sub.add_parser("emuladores", help="lista ou instala os emuladores")
+    p.add_argument(
+        "acao", nargs="?", choices=["instalar"], help="instalar: sem alvos, instala o que as suas ROMs pedem"
+    )
+    p.add_argument("alvos", nargs="*", metavar="SISTEMA_OU_EMULADOR")
+    p.set_defaults(func=cmd_emuladores)
+
+    p = sub.add_parser("lojas", help="jogos da Steam e do Heroic (Epic, GOG, Amazon)")
+    p.add_argument("--detalhes", action="store_true", help="lista os jogos")
+    p.set_defaults(func=cmd_lojas)
+
     p = sub.add_parser("portal", help="tela com as capas dos jogos, estilo Game Pass")
     p.add_argument("--kiosk", action="store_true", help="abre o navegador em tela cheia (é o que o Sunshine usa)")
     p.add_argument("--porta", type=int, default=portal.PORTA)
@@ -234,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         jogos = catalogo.carregar()
         return args.func(jogos, args)
-    except catalogo.ErroCatalogo as e:
+    except (catalogo.ErroCatalogo, ValueError, RuntimeError) as e:
         print(f"erro: {e}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:

@@ -2,7 +2,7 @@
 
 Os jogos rodam no PC, então o progresso fica sempre no PC (o celular só recebe
 o vídeo). O campo `saves` do catálogo diz onde cada jogo grava: caminhos
-relativos à pasta do jogo (~/AllGames/jogos/<id>) ou começando com "~/".
+relativos à pasta do jogo (~/AllGames/jogos/<id>), começando com "~/" ou absolutos.
 Antes de cada partida o AllGames copia esses arquivos para
 ~/AllGames/backups/<id>/<data>, guardando as últimas cópias.
 """
@@ -22,6 +22,8 @@ _ASSINATURA = ".assinatura"
 def _base_e_padrao(jogo: Jogo, padrao: str) -> tuple[Path, str]:
     if padrao.startswith("~/"):
         return Path.home(), padrao[2:]
+    if padrao.startswith("/"):
+        return Path("/"), padrao[1:]
     return jogo.pasta, padrao
 
 
@@ -39,15 +41,18 @@ def ultimo_save(jogo: Jogo) -> float | None:
 
 
 def _no_backup(jogo: Jogo, arquivo: Path) -> Path:
-    """Caminho do arquivo dentro de uma cópia: jogo/... ou home/..."""
+    """Caminho do arquivo dentro de uma cópia: jogo/..., home/... ou raiz/..."""
     if arquivo.is_relative_to(jogo.pasta):
         return Path("jogo") / arquivo.relative_to(jogo.pasta)
-    return Path("home") / arquivo.relative_to(Path.home())
+    if arquivo.is_relative_to(Path.home()):
+        return Path("home") / arquivo.relative_to(Path.home())
+    return Path("raiz") / arquivo.relative_to("/")
 
 
 def _do_backup(jogo: Jogo, relativo: Path) -> Path:
     raiz, *resto = relativo.parts
-    return (jogo.pasta if raiz == "jogo" else Path.home()).joinpath(*resto)
+    base = {"jogo": jogo.pasta, "home": Path.home()}.get(raiz, Path("/"))
+    return base.joinpath(*resto)
 
 
 def _assinatura(jogo: Jogo, lista: list[Path]) -> str:
@@ -58,8 +63,13 @@ def _assinatura(jogo: Jogo, lista: list[Path]) -> str:
     return h.hexdigest()
 
 
+def _pasta_backups(jogo: Jogo) -> Path:
+    # "rom:snes/Jogo.sfc" -> backups/rom/snes/Jogo.sfc
+    return caminhos.backups() / jogo.id.replace(":", "/")
+
+
 def backups(jogo: Jogo) -> list[Path]:
-    pasta = caminhos.backups() / jogo.id
+    pasta = _pasta_backups(jogo)
     return sorted(p for p in pasta.iterdir() if p.is_dir()) if pasta.is_dir() else []
 
 
@@ -75,7 +85,7 @@ def fazer_backup(jogo: Jogo) -> Path | None:
             return None
 
     # Com microssegundos, a ordem alfabética dos nomes é a ordem em que foram feitas.
-    destino = caminhos.backups() / jogo.id / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    destino = _pasta_backups(jogo) / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     for arquivo in lista:
         alvo = destino / _no_backup(jogo, arquivo)
         alvo.parent.mkdir(parents=True, exist_ok=True)

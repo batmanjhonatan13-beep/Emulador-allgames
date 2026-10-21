@@ -12,12 +12,13 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib.parse
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import caminhos, capas, saves
+from . import caminhos, capas, lojas, saves
 from .catalogo import Jogo, verificar
 
 PORTA = 47800
@@ -31,7 +32,25 @@ def _data(timestamp: float | None) -> str | None:
     return datetime.fromtimestamp(timestamp).isoformat(timespec="seconds") if timestamp else None
 
 
-def descrever(jogo: Jogo) -> dict:
+def _capa(jogo: Jogo) -> str | None:
+    if jogo.capa_url:
+        return jogo.capa_url
+    if jogo.capa or capas.obter(jogo, baixar=False):
+        return "/capa?" + urllib.parse.urlencode({"id": jogo.id})
+    return None
+
+
+def acoes(jogo: Jogo) -> list[str]:
+    """O que o portal pode fazer com o jogo."""
+    if jogo.origem != "catalogo":
+        return jogo.acoes
+    if jogo.instalado:
+        return ["jogar"]
+    # Jogos do catálogo só instalam com os arquivos originais no PC.
+    return [] if any(not v.ok for v in verificar(jogo)) else ["instalar"]
+
+
+def descrever(jogo: Jogo, tarefa: str | None = None) -> dict:
     return {
         "id": jogo.id,
         "nome": jogo.nome,
@@ -42,7 +61,13 @@ def descrever(jogo: Jogo) -> dict:
         "controles": jogo.controles,
         "instalado": jogo.instalado,
         "falta": [v.problema for v in verificar(jogo) if not v.ok],
-        "capa": f"/capas/{jogo.id}.png" if jogo.capa or capas.obter(jogo, baixar=False) else None,
+        "capa": _capa(jogo),
+        "capa_alternativa": jogo.capa_alternativa or None,
+        "origem": jogo.origem,
+        "acoes": acoes(jogo),
+        "pendente": jogo.extra.get("falta", ""),
+        "aviso": jogo.extra.get("aviso", ""),
+        "tarefa": tarefa,
         "ultimo_save": _data(saves.ultimo_save(jogo)),
         "jogado_em": _data(jogo.jogado_em),
     }
@@ -82,14 +107,51 @@ class Partida:
                     self._processo.kill()
 
 
+class Tarefas:
+    """Instalações em segundo plano (emuladores, jogos do catálogo)."""
+
+    def __init__(self):
+        self._processos: dict[str, subprocess.Popen] = {}
+        self._trava = threading.Lock()
+
+    def situacao(self, id_: str) -> str | None:
+        with self._trava:
+            processo = self._processos.get(id_)
+            if not processo:
+                return None
+            if processo.poll() is None:
+                return "instalando"
+            return "erro" if processo.returncode else None
+
+    def iniciar(self, id_: str, argv: list[str]) -> bool:
+        if self.situacao(id_) == "instalando":
+            return False
+        caminhos.logs().mkdir(parents=True, exist_ok=True)
+        log = open(caminhos.logs() / "instalacoes.log", "ab")  # noqa: SIM115 - fica aberto com o processo
+        with self._trava:
+            self._processos[id_] = subprocess.Popen(argv, stdout=log, stderr=log, stdin=subprocess.DEVNULL)
+        return True
+
+
 class Portal(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, endereco, jogos: list[Jogo], comando, ao_sair=None):
+    def __init__(self, endereco, carregar_jogos, comando, ao_sair=None):
         super().__init__(endereco, Handler)
-        self.jogos = {j.id: j for j in jogos}
+        self.carregar_jogos = carregar_jogos
+        self.jogos: dict[str, Jogo] = {}
         self.partida = Partida(comando)
+        self.tarefas = Tarefas()
         self.ao_sair = ao_sair
+
+    def atualizar(self) -> dict[str, Jogo]:
+        self.jogos = {j.id: j for j in self.carregar_jogos()}
+        return self.jogos
+
+    def jogo(self, id_: str | None) -> Jogo | None:
+        if not id_:
+            return None
+        return self.jogos.get(id_) or self.atualizar().get(id_)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -109,18 +171,22 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, dados, status: int = HTTPStatus.OK) -> None:
         self._responder(status, json.dumps(dados, ensure_ascii=False).encode())
 
+    def _id(self) -> str | None:
+        return urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id", [None])[0]
+
     def do_GET(self):
-        caminho = self.path.split("?")[0]
+        caminho = urllib.parse.urlparse(self.path).path
         if caminho in ARQUIVOS:
             arquivo = caminhos.PORTAL / ARQUIVOS[caminho]
             self._responder(HTTPStatus.OK, arquivo.read_bytes(), TIPOS_DE_ARQUIVO[arquivo.suffix])
         elif caminho == "/api/jogos":
-            jogos = [descrever(j) for j in self.server.jogos.values()]
+            tarefas = self.server.tarefas
+            jogos = [descrever(j, tarefas.situacao(j.id)) for j in self.server.atualizar().values()]
             self._json({"jogos": jogos, "jogando": self.server.partida.jogo, "pode_sair": bool(self.server.ao_sair)})
         elif caminho == "/api/estado":
             self._json({"jogando": self.server.partida.jogo})
-        elif caminho.startswith("/capas/") and caminho.endswith(".png"):
-            jogo = self.server.jogos.get(caminho[len("/capas/") : -len(".png")])
+        elif caminho == "/capa":
+            jogo = self.server.jogo(self._id())
             capa = capas.obter(jogo) if jogo else None
             if capa:
                 self._responder(HTTPStatus.OK, capa.read_bytes(), "image/png")
@@ -134,31 +200,56 @@ class Handler(BaseHTTPRequestHandler):
         # para cá (bloqueado pelo CORS), então só a própria página abre jogos.
         if self.headers.get("X-AllGames") != "1":
             return self._responder(HTTPStatus.FORBIDDEN)
-        caminho = self.path.split("?")[0]
-        if caminho.startswith("/api/jogar/"):
-            jogo = self.server.jogos.get(caminho[len("/api/jogar/") :])
+        caminho = urllib.parse.urlparse(self.path).path
+        if caminho in ("/api/jogar", "/api/instalar", "/api/desinstalar"):
+            jogo = self.server.jogo(self._id())
             if not jogo:
                 return self._json({"erro": "jogo desconhecido"}, HTTPStatus.NOT_FOUND)
-            if not jogo.instalado:
-                return self._json({"erro": f"instale no PC: allgames instalar {jogo.id}"}, HTTPStatus.CONFLICT)
-            if not self.server.partida.iniciar(jogo):
-                return self._json({"erro": "já tem um jogo aberto"}, HTTPStatus.CONFLICT)
-            self._json({"jogando": jogo.id})
-        elif caminho == "/api/encerrar":
+            acao = caminho.removeprefix("/api/")
+            if acao not in acoes(jogo):
+                return self._json({"erro": f"não dá para {acao} {jogo.nome} por aqui"}, HTTPStatus.CONFLICT)
+            try:
+                return getattr(self, f"_{acao}")(jogo)
+            except (RuntimeError, ValueError) as erro:
+                return self._json({"erro": str(erro)}, HTTPStatus.CONFLICT)
+        if caminho == "/api/encerrar":
             self.server.partida.encerrar()
-            self._json({"jogando": None})
-        elif caminho == "/api/sair" and self.server.ao_sair:
+            return self._json({"jogando": None})
+        if caminho == "/api/sair" and self.server.ao_sair:
             self._json({"saindo": True})
             self.server.partida.encerrar()
             threading.Thread(target=self.server.ao_sair, daemon=True).start()
+            return None
+        return self._responder(HTTPStatus.NOT_FOUND)
+
+    def _jogar(self, jogo: Jogo):
+        if not self.server.partida.iniciar(jogo):
+            return self._json({"erro": "já tem um jogo aberto"}, HTTPStatus.CONFLICT)
+        return self._json({"jogando": jogo.id})
+
+    def _instalar(self, jogo: Jogo):
+        if jogo.origem in ("steam", "heroic"):
+            return self._json({"mensagem": lojas.acao(jogo, "instalar")})
+        if jogo.origem == "rom":
+            argv = [*_allgames(), "emuladores", "instalar", jogo.extra["sistema"]]
         else:
-            self._responder(HTTPStatus.NOT_FOUND)
+            argv = [*_allgames(), "instalar", jogo.id]
+        if not self.server.tarefas.iniciar(jogo.id, argv):
+            return self._json({"erro": "já está instalando"}, HTTPStatus.CONFLICT)
+        return self._json({"mensagem": "Instalando no PC. Acompanhe em ~/AllGames/logs/instalacoes.log"})
+
+    def _desinstalar(self, jogo: Jogo):
+        return self._json({"mensagem": lojas.acao(jogo, "desinstalar")})
+
+
+def _allgames() -> list[str]:
+    return [sys.executable, str(caminhos.EXECUTAVEL)]
 
 
 def comando_jogar(gamescope: bool):
     def comando(jogo: Jogo) -> list[str]:
         opcoes = ["--gamescope"] if gamescope else []
-        return [sys.executable, str(caminhos.EXECUTAVEL), "jogar", *opcoes, jogo.id]
+        return [*_allgames(), "jogar", *opcoes, jogo.id]
 
     return comando
 
@@ -205,7 +296,7 @@ def _preparar_firefox(perfil: Path) -> None:
     (perfil / "user.js").write_text("\n".join(linhas) + "\n")
 
 
-def servir(jogos: list[Jogo], porta: int, publico: bool, kiosk: bool, gamescope: bool) -> int:
+def servir(carregar_jogos, porta: int, publico: bool, kiosk: bool, gamescope: bool) -> int:
     navegador: subprocess.Popen | None = None
 
     def sair():
@@ -214,7 +305,7 @@ def servir(jogos: list[Jogo], porta: int, publico: bool, kiosk: bool, gamescope:
         servidor.shutdown()
 
     endereco = ("0.0.0.0" if publico else "127.0.0.1", porta)
-    servidor = Portal(endereco, jogos, comando_jogar(gamescope), ao_sair=sair if kiosk else None)
+    servidor = Portal(endereco, carregar_jogos, comando_jogar(gamescope), ao_sair=sair if kiosk else None)
     url = f"http://127.0.0.1:{porta}/"
 
     if not kiosk:

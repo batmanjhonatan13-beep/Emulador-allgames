@@ -3,6 +3,7 @@
 import fnmatch
 import hashlib
 import json
+import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -70,6 +71,13 @@ class Jogo:
     projeto: str = ""
     capa: str = ""
     originais: list[Original] = field(default_factory=list)
+    # Preenchidos pelo AllGames para ROMs (sistemas.py) e lojas (lojas.py):
+    origem: str = "catalogo"  # catalogo | rom | steam | heroic
+    acoes: list[str] = field(default_factory=lambda: ["jogar"])
+    capa_url: str = ""
+    capa_alternativa: str = ""
+    situacao: bool | None = None  # instalado ou não, quando não depende de .instalado
+    extra: dict = field(default_factory=dict)
 
     @property
     def arquivo_receita(self) -> Path:
@@ -77,10 +85,18 @@ class Jogo:
 
     @property
     def pasta(self) -> Path:
-        return caminhos.jogos() / self.id
+        # "rom:snes/Jogo.sfc" -> jogos/rom/snes/Jogo.sfc
+        return caminhos.jogos() / self.id.replace(":", "/")
+
+    @property
+    def chave(self) -> str:
+        """O id em forma de nome de arquivo (capas, caches)."""
+        return re.sub(r"[^A-Za-z0-9._-]+", "_", self.id)
 
     @property
     def instalado(self) -> bool:
+        if self.situacao is not None:
+            return self.situacao
         return (self.pasta / ".instalado").exists()
 
     @property

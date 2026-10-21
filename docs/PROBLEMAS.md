@@ -74,6 +74,28 @@ cat ~/AllGames/logs/<id>.log                              # log do jogo
 - "o catálogo não diz onde este jogo grava os saves": adicione o campo `saves` ao jogo em
   `catalogo/jogos.toml`.
 
+## ROMs e emuladores
+
+- **A ROM não aparece:** confira a pasta e a extensão com `allgames roms` (a lista de extensões de
+  cada console está no `LEIA-ME.txt` da pasta). ROMs compactadas em `.zip` funcionam nos consoles
+  retrô; para PS1/PS2/PSP use `.chd`, `.iso` ou `.cso`.
+- **"Falta o emulador":** `allgames emuladores instalar` (ou o botão no portal). O log fica em
+  `~/AllGames/logs/instalacoes.log`.
+- **O jogo abre e fecha:** quase sempre é a BIOS. Veja o `LEIA-ME.txt` da pasta e o log em
+  `~/AllGames/logs/`.
+- **PS2 pede configuração:** na primeira vez o PCSX2 abre o assistente. Faça isso no PC, apontando a
+  BIOS para `~/AllGames/roms/bios`.
+
+## Steam e Heroic
+
+- **Os jogos não aparecem:** `allgames lojas` diz o que foi encontrado. Na Steam, sem a chave da
+  Web API, aparecem só os instalados (veja [LOJAS.md](LOJAS.md)). No Heroic, entre nas contas pelo
+  próprio Heroic, no PC.
+- **Jogo de Windows não abre na Steam:** ligue o Steam Play para todos os títulos (Configurações →
+  Compatibilidade) e, nas propriedades do jogo, teste outra versão do Proton.
+- **O portal volta antes do jogo fechar (ou não volta):** o AllGames acompanha o processo do jogo.
+  Se ele não for reconhecido em 3 minutos, o portal volta. Feche o jogo normalmente para voltar.
+
 ## Pokémon não é reconhecido
 
 - `allgames verificar pokemon-emerald` diz se achou um arquivo com a extensão certa e se o SHA-1

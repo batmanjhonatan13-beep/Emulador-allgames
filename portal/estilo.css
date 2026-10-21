@@ -255,7 +255,12 @@ main {
   color: var(--destaque-texto);
 }
 
-.botao.primario svg {
+.botao.perigo {
+  border-color: rgb(255 95 87 / 45%);
+  color: #ff8f88;
+}
+
+.botao svg.cheio {
   fill: currentColor;
   stroke: none;
 }
@@ -405,6 +410,22 @@ main {
   font-size: 0.75rem;
   font-weight: 700;
   backdrop-filter: blur(6px);
+}
+
+.etiqueta-ativa {
+  color: var(--destaque);
+  animation: pulsar 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes pulsar {
+  to {
+    opacity: 0.55;
+  }
+}
+
+.cartao-mais .arte {
+  background: var(--superficie-2);
+  border: 1px dashed var(--borda);
 }
 
 .etiqueta-save {

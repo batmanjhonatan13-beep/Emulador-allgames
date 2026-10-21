@@ -42,22 +42,42 @@ def instalar(jogo: Jogo) -> int:
     return retorno
 
 
+def _com_gamescope(argv: list[str], env: dict[str, str], gamescope: bool) -> list[str]:
+    if not (gamescope and shutil.which("gamescope")):
+        return argv
+    # Renderiza o jogo direto na resolução/FPS que o celular pediu ao Sunshine.
+    largura = env.get("SUNSHINE_CLIENT_WIDTH", "1920")
+    altura = env.get("SUNSHINE_CLIENT_HEIGHT", "1080")
+    fps = env.get("SUNSHINE_CLIENT_FPS", "60")
+    return ["gamescope", "-f", "-W", largura, "-H", altura, "-r", fps, "--", *argv]
+
+
+def arquivo_log(jogo: Jogo) -> Path:
+    caminhos.logs().mkdir(parents=True, exist_ok=True)
+    return caminhos.logs() / f"{jogo.chave}.log"
+
+
 def comando_jogar(jogo: Jogo, gamescope: bool = False) -> tuple[list[str], dict[str, str]]:
     """Comando que abre o jogo, com a saída indo para ~/AllGames/logs/<id>.log."""
-    caminhos.logs().mkdir(parents=True, exist_ok=True)
-    log = caminhos.logs() / f"{jogo.id}.log"
-    argv = ["bash", "-c", _script(jogo, "executar", log)]
     env = _ambiente(jogo)
-    if gamescope and shutil.which("gamescope"):
-        # Renderiza o jogo direto na resolução/FPS que o celular pediu ao Sunshine.
-        largura = env.get("SUNSHINE_CLIENT_WIDTH", "1920")
-        altura = env.get("SUNSHINE_CLIENT_HEIGHT", "1080")
-        fps = env.get("SUNSHINE_CLIENT_FPS", "60")
-        argv = ["gamescope", "-f", "-W", largura, "-H", altura, "-r", fps, "--", *argv]
-    return argv, env
+    argv = ["bash", "-c", _script(jogo, "executar", arquivo_log(jogo))]
+    return _com_gamescope(argv, env, gamescope), env
 
 
 def jogar(jogo: Jogo, gamescope: bool = False) -> None:
     """Substitui o processo atual pelo jogo, para o Sunshine controlar o ciclo de vida."""
     argv, env = comando_jogar(jogo, gamescope)
+    os.execvpe(argv[0], argv, env)
+
+
+def jogar_comando(jogo: Jogo, argv: list[str], gamescope: bool = False) -> None:
+    """Como `jogar`, para jogos abertos direto por um comando (ROMs no emulador)."""
+    env = dict(os.environ)
+    argv = _com_gamescope(argv, env, gamescope)
+    if not shutil.which(argv[0]):
+        raise RuntimeError(f"{argv[0]} não está instalado no PC")
+    log = os.open(arquivo_log(jogo), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    os.write(log, f"\n$ {shlex.join(argv)}\n".encode())
+    os.dup2(log, 1)
+    os.dup2(log, 2)
     os.execvpe(argv[0], argv, env)

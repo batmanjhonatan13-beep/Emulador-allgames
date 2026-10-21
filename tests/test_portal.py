@@ -22,7 +22,8 @@ class Portal(unittest.TestCase):
         (self.instalado.pasta / "a.sav").write_text("save")
         self.pendente = Jogo("b", "Jogo B", "PC", "pc", controles=["toque"])
         comando = lambda jogo: [sys.executable, "-c", "import time; time.sleep(30)"]  # noqa: E731
-        self.servidor = portal.Portal(("127.0.0.1", 0), [self.instalado, self.pendente], comando)
+        jogos = [self.instalado, self.pendente]
+        self.servidor = portal.Portal(("127.0.0.1", 0), lambda: jogos, comando)
         self.url = f"http://127.0.0.1:{self.servidor.server_address[1]}"
         threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
 
@@ -58,15 +59,15 @@ class Portal(unittest.TestCase):
         self.assertIsNone(dados["jogando"])
 
     def test_post_sem_cabecalho_e_recusado(self):
-        status, _ = self._pedir("/api/jogar/a", "POST", cabecalho=False)
+        status, _ = self._pedir("/api/jogar?id=a", "POST", cabecalho=False)
         self.assertEqual(status, 403)
 
     def test_jogar_um_por_vez_e_encerrar(self):
-        self.assertEqual(self._pedir("/api/jogar/b", "POST")[0], 409)  # não instalado
-        self.assertEqual(self._pedir("/api/jogar/zzz", "POST")[0], 404)
-        self.assertEqual(self._pedir("/api/jogar/a", "POST")[0], 200)
+        self.assertEqual(self._pedir("/api/jogar?id=b", "POST")[0], 409)  # não instalado
+        self.assertEqual(self._pedir("/api/jogar?id=zzz", "POST")[0], 404)
+        self.assertEqual(self._pedir("/api/jogar?id=a", "POST")[0], 200)
         self.assertEqual(json.loads(self._pedir("/api/estado")[1])["jogando"], "a")
-        self.assertEqual(self._pedir("/api/jogar/a", "POST")[0], 409)  # já tem jogo aberto
+        self.assertEqual(self._pedir("/api/jogar?id=a", "POST")[0], 409)  # já tem jogo aberto
         self.assertEqual(self._pedir("/api/encerrar", "POST")[0], 200)
         time.sleep(0.2)
         self.assertIsNone(json.loads(self._pedir("/api/estado")[1])["jogando"])
@@ -75,8 +76,15 @@ class Portal(unittest.TestCase):
         self.assertEqual(self._pedir("/api/sair", "POST")[0], 404)
 
     def test_capa_inexistente(self):
-        self.assertEqual(self._pedir("/capas/b.png")[0], 404)
-        self.assertEqual(self._pedir("/capas/../../etc/passwd.png")[0], 404)
+        self.assertEqual(self._pedir("/capa?id=b")[0], 404)
+        self.assertEqual(self._pedir("/capa?id=../../etc/passwd")[0], 404)
+
+    def test_acoes(self):
+        jogos = {j["id"]: j for j in json.loads(self._pedir("/api/jogos")[1])["jogos"]}
+        self.assertEqual(jogos["a"]["acoes"], ["jogar"])
+        self.assertEqual(jogos["b"]["acoes"], ["instalar"])  # sem originais exigidos
+        self.assertEqual(jogos["a"]["origem"], "catalogo")
+        self.assertEqual(self._pedir("/api/desinstalar?id=a", "POST")[0], 409)
 
 
 if __name__ == "__main__":

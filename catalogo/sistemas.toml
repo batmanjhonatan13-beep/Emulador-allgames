@@ -1,0 +1,417 @@
+# Consoles e emuladores, no estilo do ArkOS/R36S.
+#
+# Cada [[sistema]] é uma pasta em ~/AllGames/roms/<pasta>. Toda ROM colocada lá
+# aparece sozinha no portal, com capa, e abre no emulador do sistema. As pastas
+# usam os mesmos nomes do ArkOS: dá para copiar a pasta "roms" do cartão do R36S
+# inteira (com a "bios" junto) para ~/AllGames/roms.
+#
+# Sistema:
+#   id          pasta principal em ~/AllGames/roms (nome do ArkOS)
+#   pastas      outros nomes aceitos para a mesma pasta (ex.: "megadrive")
+#   nome        nome mostrado no portal
+#   extensoes   extensões de ROM reconhecidas
+#   emulador    chave de [emulador.<chave>]
+#   core        core do RetroArch (só para emulador = "retroarch")
+#   libretro    pasta do acervo libretro-thumbnails, para as capas
+#   bios        arquivos de BIOS do SEU console, em ~/AllGames/roms/bios
+#   controles   como padrão "controle"; "toque" se der para jogar tocando
+#
+# Emulador:
+#   flatpak     app do Flathub instalado por `allgames emuladores instalar`
+#   appimage    em vez de flatpak: você coloca o AppImage em
+#               ~/AllGames/emuladores/<chave>/ (usado quando não há versão no Flathub)
+#   comando     como abrir uma ROM. Marcadores: {emulador} (o comando do app),
+#               {rom}, {pasta_rom}, {roms}, {bios}, {core}, {retroarch_cfg}
+#   saves       onde o emulador grava o progresso (vai para as cópias de segurança).
+#               Marcadores: {pasta_rom}, {nome} (nome da ROM sem extensão)
+#   alternativas  comando diferente quando o nome do AppImage contém a palavra
+#   aviso       observação mostrada no portal e em `allgames emuladores`
+#
+# Nada aqui baixa ROMs, BIOS, chaves ou firmware: você usa os do seu console.
+
+# ------------------------------------------------------------------ emuladores
+
+[emulador.retroarch]
+nome = "RetroArch"
+flatpak = "org.libretro.RetroArch"
+# Os saves ficam ao lado da ROM, como no ArkOS (ao copiar o cartão do R36S os
+# saves .srm vêm junto) e a BIOS vem de ~/AllGames/roms/bios.
+comando = ["{emulador}", "-f", "-L", "{core}", "--appendconfig", "{retroarch_cfg}", "{rom}"]
+saves = ["{pasta_rom}/{nome}.srm", "{pasta_rom}/{nome}.state*", "{pasta_rom}/{nome}.sav"]
+
+[emulador.melonds]
+nome = "melonDS"
+flatpak = "net.kuribo64.melonDS"
+comando = ["{emulador}", "--fullscreen", "{rom}"]
+saves = ["{pasta_rom}/{nome}.sav", "{pasta_rom}/{nome}.ml[0-9]"]
+
+[emulador.ppsspp]
+nome = "PPSSPP"
+flatpak = "org.ppsspp.PPSSPP"
+comando = ["{emulador}", "--fullscreen", "{rom}"]
+saves = ["~/.var/app/org.ppsspp.PPSSPP/config/ppsspp/PSP/SAVEDATA/**/*"]
+
+[emulador.pcsx2]
+nome = "PCSX2"
+flatpak = "net.pcsx2.PCSX2"
+comando = ["{emulador}", "-fullscreen", "-batch", "--", "{rom}"]
+saves = ["~/.var/app/net.pcsx2.PCSX2/config/PCSX2/memcards/*"]
+aviso = "Na primeira vez, o PCSX2 pede a pasta da BIOS do seu PS2: escolha ~/AllGames/roms/bios."
+
+[emulador.dolphin]
+nome = "Dolphin"
+flatpak = "org.DolphinEmu.dolphin-emu"
+comando = ["{emulador}", "--batch", "--config=Dolphin.Display.Fullscreen=True", "--exec={rom}"]
+saves = [
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/GC/**/*",
+  "~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Wii/title/**/data/*",
+]
+
+[emulador.azahar]
+nome = "Azahar"
+flatpak = "org.azahar_emu.Azahar"
+comando = ["{emulador}", "-f", "{rom}"]
+saves = ["~/.var/app/org.azahar_emu.Azahar/data/azahar-emu/sdmc/Nintendo 3DS/*/*/title/*/*/data/**/*"]
+
+[emulador.xemu]
+nome = "xemu"
+flatpak = "app.xemu.xemu"
+comando = ["{emulador}", "-full-screen", "-dvd_path", "{rom}"]
+aviso = "Na primeira vez, configure no xemu a BIOS, o boot ROM (MCPX) e o HD do seu Xbox, em ~/AllGames/roms/bios/xbox. Os saves ficam dentro do HD virtual (xbox_hdd.qcow2): copie esse arquivo para guardar."
+
+[emulador.switch]
+nome = "Emulador de Switch (Eden, Citron ou Ryujinx)"
+appimage = "switch"
+comando = ["{emulador}", "-f", "-g", "{rom}"]
+# Se o nome do AppImage tiver uma destas palavras, usa o comando correspondente.
+alternativas = { ryujinx = ["{emulador}", "--fullscreen", "{rom}"], ryubing = ["{emulador}", "--fullscreen", "{rom}"] }
+aviso = "Baixe o AppImage do emulador no site oficial dele e coloque em ~/AllGames/emuladores/switch/. Ele precisa das chaves (prod.keys) e do firmware tirados do SEU Switch."
+
+[emulador.xenia]
+nome = "Xenia Canary (Xbox 360, experimental no Linux)"
+appimage = "xenia"
+comando = ["{emulador}", "--fullscreen", "{rom}"]
+aviso = "A versão Linux do Xenia ainda é experimental: muitos jogos não abrem. Coloque o AppImage em ~/AllGames/emuladores/xenia/."
+
+# ------------------------------------------------------------------ Nintendo
+
+[[sistema]]
+id = "nes"
+pastas = ["famicom"]
+nome = "Nintendo (NES)"
+extensoes = ["nes", "fds", "unf", "zip", "7z"]
+emulador = "retroarch"
+core = "fceumm"
+libretro = "Nintendo - Nintendo Entertainment System"
+
+[[sistema]]
+id = "snes"
+pastas = ["sfc", "superfamicom"]
+nome = "Super Nintendo"
+extensoes = ["sfc", "smc", "zip", "7z"]
+emulador = "retroarch"
+core = "snes9x"
+libretro = "Nintendo - Super Nintendo Entertainment System"
+
+[[sistema]]
+id = "gb"
+nome = "Game Boy"
+extensoes = ["gb", "zip", "7z"]
+emulador = "retroarch"
+core = "gambatte"
+libretro = "Nintendo - Game Boy"
+
+[[sistema]]
+id = "gbc"
+nome = "Game Boy Color"
+extensoes = ["gbc", "gb", "zip", "7z"]
+emulador = "retroarch"
+core = "gambatte"
+libretro = "Nintendo - Game Boy Color"
+
+[[sistema]]
+id = "gba"
+nome = "Game Boy Advance"
+extensoes = ["gba", "zip", "7z"]
+emulador = "retroarch"
+core = "mgba"
+libretro = "Nintendo - Game Boy Advance"
+
+[[sistema]]
+id = "n64"
+nome = "Nintendo 64"
+extensoes = ["z64", "n64", "v64", "zip", "7z"]
+emulador = "retroarch"
+core = "mupen64plus_next"
+libretro = "Nintendo - Nintendo 64"
+
+[[sistema]]
+id = "nds"
+nome = "Nintendo DS"
+extensoes = ["nds", "zip"]
+emulador = "melonds"
+libretro = "Nintendo - Nintendo DS"
+controles = ["controle", "toque"]
+
+[[sistema]]
+id = "virtualboy"
+nome = "Virtual Boy"
+extensoes = ["vb", "zip"]
+emulador = "retroarch"
+core = "mednafen_vb"
+libretro = "Nintendo - Virtual Boy"
+
+[[sistema]]
+id = "gc"
+pastas = ["gamecube"]
+nome = "GameCube"
+extensoes = ["iso", "rvz", "gcm", "gcz", "ciso", "m3u"]
+emulador = "dolphin"
+libretro = "Nintendo - GameCube"
+
+[[sistema]]
+id = "wii"
+nome = "Wii"
+extensoes = ["iso", "rvz", "wbfs", "wia", "gcz"]
+emulador = "dolphin"
+libretro = "Nintendo - Wii"
+
+[[sistema]]
+id = "3ds"
+nome = "Nintendo 3DS"
+extensoes = ["3ds", "cci", "cxi", "app"]
+emulador = "azahar"
+libretro = "Nintendo - Nintendo 3DS"
+controles = ["controle", "toque"]
+
+[[sistema]]
+id = "switch"
+nome = "Nintendo Switch"
+extensoes = ["nsp", "xci", "nca", "nso"]
+emulador = "switch"
+
+# ------------------------------------------------------------------ Sony
+
+[[sistema]]
+id = "psx"
+pastas = ["ps1", "playstation"]
+nome = "PlayStation"
+extensoes = ["cue", "chd", "pbp", "m3u", "iso", "img"]
+emulador = "retroarch"
+core = "mednafen_psx_hw"
+libretro = "Sony - PlayStation"
+bios = ["scph5501.bin (EUA)", "scph5500.bin (Japão)", "scph5502.bin (Europa)"]
+
+[[sistema]]
+id = "ps2"
+nome = "PlayStation 2"
+extensoes = ["iso", "chd", "cso", "bin", "gz"]
+emulador = "pcsx2"
+libretro = "Sony - PlayStation 2"
+bios = ["BIOS do seu PS2 (ex.: SCPH-70012.bin)"]
+
+[[sistema]]
+id = "psp"
+nome = "PSP"
+extensoes = ["iso", "cso", "pbp", "chd"]
+emulador = "ppsspp"
+libretro = "Sony - PlayStation Portable"
+
+# ------------------------------------------------------------------ Microsoft
+
+[[sistema]]
+id = "xbox"
+nome = "Xbox"
+extensoes = ["iso", "xiso"]
+emulador = "xemu"
+libretro = "Microsoft - Xbox"
+bios = ["xbox/mcpx_1.0.bin", "xbox/Complex_4627.bin (ou a BIOS do seu console)", "xbox/xbox_hdd.qcow2"]
+
+[[sistema]]
+id = "xbox360"
+nome = "Xbox 360"
+extensoes = ["iso", "xex", "zar"]
+emulador = "xenia"
+libretro = "Microsoft - Xbox 360"
+
+# ------------------------------------------------------------------ Sega
+
+[[sistema]]
+id = "genesis"
+pastas = ["megadrive", "md"]
+nome = "Mega Drive"
+extensoes = ["md", "gen", "smd", "bin", "zip", "7z"]
+emulador = "retroarch"
+core = "genesis_plus_gx"
+libretro = "Sega - Mega Drive - Genesis"
+
+[[sistema]]
+id = "mastersystem"
+pastas = ["sms"]
+nome = "Master System"
+extensoes = ["sms", "zip", "7z"]
+emulador = "retroarch"
+core = "genesis_plus_gx"
+libretro = "Sega - Master System - Mark III"
+
+[[sistema]]
+id = "gamegear"
+pastas = ["gg"]
+nome = "Game Gear"
+extensoes = ["gg", "zip", "7z"]
+emulador = "retroarch"
+core = "genesis_plus_gx"
+libretro = "Sega - Game Gear"
+
+[[sistema]]
+id = "segacd"
+pastas = ["megacd"]
+nome = "Sega CD"
+extensoes = ["cue", "chd", "iso", "m3u"]
+emulador = "retroarch"
+core = "genesis_plus_gx"
+libretro = "Sega - Mega-CD - Sega CD"
+bios = ["bios_CD_U.bin (EUA)", "bios_CD_E.bin (Europa)", "bios_CD_J.bin (Japão)"]
+
+[[sistema]]
+id = "sega32x"
+pastas = ["32x"]
+nome = "Sega 32X"
+extensoes = ["32x", "zip", "7z"]
+emulador = "retroarch"
+core = "picodrive"
+libretro = "Sega - 32X"
+
+[[sistema]]
+id = "saturn"
+nome = "Sega Saturn"
+extensoes = ["cue", "chd", "m3u", "ccd"]
+emulador = "retroarch"
+core = "mednafen_saturn"
+libretro = "Sega - Saturn"
+bios = ["sega_101.bin (Japão)", "mpr-17933.bin (EUA/Europa)"]
+
+[[sistema]]
+id = "dreamcast"
+pastas = ["dc"]
+nome = "Dreamcast"
+extensoes = ["chd", "gdi", "cdi", "cue", "m3u"]
+emulador = "retroarch"
+core = "flycast"
+libretro = "Sega - Dreamcast"
+
+# ------------------------------------------------------------------ outros
+
+[[sistema]]
+id = "pcengine"
+pastas = ["pce", "tg16"]
+nome = "PC Engine"
+extensoes = ["pce", "zip", "7z"]
+emulador = "retroarch"
+core = "mednafen_pce_fast"
+libretro = "NEC - PC Engine - TurboGrafx 16"
+
+[[sistema]]
+id = "pcenginecd"
+pastas = ["pcecd", "tg16cd"]
+nome = "PC Engine CD"
+extensoes = ["cue", "chd", "m3u"]
+emulador = "retroarch"
+core = "mednafen_pce_fast"
+libretro = "NEC - PC Engine CD - TurboGrafx-CD"
+bios = ["syscard3.pce"]
+
+[[sistema]]
+id = "neogeo"
+nome = "Neo Geo"
+extensoes = ["zip", "7z"]
+emulador = "retroarch"
+core = "fbneo"
+bios = ["neogeo.zip"]
+
+[[sistema]]
+id = "arcade"
+pastas = ["fbneo", "mame", "mame2003", "cps1", "cps2", "cps3"]
+nome = "Arcade"
+extensoes = ["zip", "7z"]
+emulador = "retroarch"
+core = "fbneo"
+
+[[sistema]]
+id = "atari2600"
+nome = "Atari 2600"
+extensoes = ["a26", "bin", "zip", "7z"]
+emulador = "retroarch"
+core = "stella"
+libretro = "Atari - 2600"
+
+[[sistema]]
+id = "atari7800"
+nome = "Atari 7800"
+extensoes = ["a78", "bin", "zip", "7z"]
+emulador = "retroarch"
+core = "prosystem"
+libretro = "Atari - 7800"
+
+[[sistema]]
+id = "atarilynx"
+pastas = ["lynx"]
+nome = "Atari Lynx"
+extensoes = ["lnx", "zip", "7z"]
+emulador = "retroarch"
+core = "handy"
+libretro = "Atari - Lynx"
+bios = ["lynxboot.img"]
+
+[[sistema]]
+id = "ngp"
+nome = "Neo Geo Pocket"
+extensoes = ["ngp", "zip", "7z"]
+emulador = "retroarch"
+core = "mednafen_ngp"
+libretro = "SNK - Neo Geo Pocket"
+
+[[sistema]]
+id = "ngpc"
+nome = "Neo Geo Pocket Color"
+extensoes = ["ngc", "ngpc", "zip", "7z"]
+emulador = "retroarch"
+core = "mednafen_ngp"
+libretro = "SNK - Neo Geo Pocket Color"
+
+[[sistema]]
+id = "wonderswan"
+pastas = ["ws"]
+nome = "WonderSwan"
+extensoes = ["ws", "zip", "7z"]
+emulador = "retroarch"
+core = "mednafen_wswan"
+libretro = "Bandai - WonderSwan"
+
+[[sistema]]
+id = "wonderswancolor"
+pastas = ["wsc"]
+nome = "WonderSwan Color"
+extensoes = ["wsc", "zip", "7z"]
+emulador = "retroarch"
+core = "mednafen_wswan"
+libretro = "Bandai - WonderSwan Color"
+
+[[sistema]]
+id = "msx"
+pastas = ["msx2"]
+nome = "MSX"
+extensoes = ["rom", "mx1", "mx2", "dsk", "zip", "7z"]
+emulador = "retroarch"
+core = "bluemsx"
+libretro = "Microsoft - MSX"
+
+[[sistema]]
+id = "dos"
+pastas = ["pc"]
+nome = "DOS"
+extensoes = ["zip", "dosz", "exe", "com", "bat"]
+emulador = "retroarch"
+core = "dosbox_pure"
+libretro = "DOS"
+controles = ["controle", "toque"]
