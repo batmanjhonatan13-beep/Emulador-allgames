@@ -19,6 +19,11 @@ EXECUTAVEL = REPO / "bin" / "allgames"
 PORTAL = REPO / "portal"
 
 
+def no_docker() -> bool:
+    """Rodando dentro da imagem Docker do AllGames (base steam-headless)."""
+    return Path("/usr/local/bin/steam-headless-init").exists()
+
+
 def base() -> Path:
     return Path(os.environ.get("ALLGAMES_HOME", Path.home() / "AllGames")).expanduser()
 

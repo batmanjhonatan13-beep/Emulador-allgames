@@ -149,6 +149,7 @@ class DownloadEpic:
         self.restante = None  # segundos
         self.pasta = ""
         self.erro = ""
+        self._antes = 0
         self._processo: subprocess.Popen | None = None
         self._parando = False
 
@@ -170,23 +171,10 @@ class DownloadEpic:
         threading.Thread(target=self._acompanhar, args=(ao_mudar,), daemon=True).start()
 
     def _acompanhar(self, ao_mudar) -> None:
-        log = (caminhos.logs() / "downloads.log").open("a")
-        for linha in self._processo.stdout:
-            log.write(linha)
-            if m := _TAMANHO.search(linha):
-                self.total = _bytes(*m.groups())
-            if m := _PASTA.search(linha):
-                self.pasta = m.group(1).strip()
-            if m := _BAIXADO.search(linha):
-                self.baixado = _bytes(*m.groups())
-            if m := _VELOCIDADE.search(linha):
-                self.velocidade = _bytes(*m.groups())
-            if m := _PROGRESSO.search(linha):
-                h, mi, se = (int(x) for x in m.groups()[1:])
-                self.restante = h * 3600 + mi * 60 + se
-                if self.total:
-                    self.baixado = max(self.baixado, int(self.total * float(m.group(1)) / 100))
-        log.close()
+        with (caminhos.logs() / "downloads.log").open("a") as log, self._processo.stdout:
+            for linha in self._processo.stdout:
+                log.write(linha)
+                self._ler(linha)
         codigo = self._processo.wait()
         if self._parando:
             self.estado = "pausado"
@@ -196,6 +184,26 @@ class DownloadEpic:
             self.estado, self.erro = "erro", "o download falhou; veja ~/AllGames/logs/downloads.log"
         self.velocidade, self.restante = 0, None
         ao_mudar()
+
+    def _ler(self, linha: str) -> None:
+        # Ao continuar, o legendary só conta o que falta baixar: o que já veio antes
+        # fica em self._antes para a barra não voltar para trás.
+        if m := _TAMANHO.search(linha):
+            falta = _bytes(*m.groups())
+            self._antes = self.total - falta if 0 < falta < self.total else 0
+            self.total = self._antes + falta
+        if m := _PASTA.search(linha):
+            self.pasta = m.group(1).strip()
+        if m := _BAIXADO.search(linha):
+            self.baixado = self._antes + _bytes(*m.groups())
+        if m := _VELOCIDADE.search(linha):
+            self.velocidade = _bytes(*m.groups())
+        if m := _PROGRESSO.search(linha):
+            h, mi, se = (int(x) for x in m.groups()[1:])
+            self.restante = h * 3600 + mi * 60 + se
+            if self.total:
+                feito = (self.total - self._antes) * float(m.group(1)) / 100
+                self.baixado = max(self.baixado, int(self._antes + feito))
 
     def pausar(self) -> None:
         if self._processo and self._processo.poll() is None:
@@ -237,14 +245,17 @@ class Downloads:
             pass
 
     def _salvar(self) -> None:
+        # Chamado também pelas threads dos downloads: grava inteiro ou nada.
         with self._trava:
             dados = [
                 {"id": d.id, "app": d.app, "nome": d.nome, "estado": d.estado, "baixado": d.baixado, "total": d.total}
                 for d in self.epic.values()
                 if d.estado != "concluido"
             ]
-        self.arquivo.parent.mkdir(parents=True, exist_ok=True)
-        self.arquivo.write_text(json.dumps(dados))
+            self.arquivo.parent.mkdir(parents=True, exist_ok=True)
+            temporario = self.arquivo.with_suffix(".tmp")
+            temporario.write_text(json.dumps(dados))
+            temporario.replace(self.arquivo)
 
     def baixar_epic(self, id_: str, app: str, nome: str) -> DownloadEpic:
         with self._trava:
@@ -262,7 +273,8 @@ class Downloads:
         if nome == "pausar":
             download.pausar()
         elif nome == "continuar":
-            download.iniciar(self._salvar)
+            if download.estado != "baixando":
+                download.iniciar(self._salvar)
         elif nome == "cancelar":
             download.pausar()
             with self._trava:
@@ -272,7 +284,9 @@ class Downloads:
         self._salvar()
 
     def lista(self) -> list[dict]:
-        itens = steam_downloads() + [d.como_dict() for d in self.epic.values()]
+        with self._trava:
+            epic = list(self.epic.values())
+        itens = steam_downloads() + [d.como_dict() for d in epic]
         agora = time.monotonic()
         for item in itens:
             # Velocidade e tempo restante da Steam a partir de leituras seguidas.

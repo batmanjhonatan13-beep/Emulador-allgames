@@ -53,11 +53,54 @@ No portal:
 
 - **Jogar:** abre pelo Heroic, sem mostrar a janela dele. O portal acompanha o jogo pela pasta de
   instalação.
-- **Instalar:** o Heroic abre e pergunta se quer instalar. Confirme na tela.
-- **Desinstalar:** o Heroic abre. Escolha o jogo e use Desinstalar. O Heroic não tem um comando
-  direto para isso.
+- **Instalar (Epic):** o AllGames baixa pelo **legendary**, o mesmo motor que o Heroic usa, com a
+  mesma conta (é só ter entrado na Epic pelo Heroic). Antes de começar ele confere se o jogo cabe
+  no disco, e o progresso aparece na aba **Downloads**, com pausa. O jogo instalado aparece no
+  Heroic também. O legendary vem na imagem Docker; sem Docker, o `scripts/instalar-lojas.sh`
+  instala.
+- **Instalar (GOG e Amazon):** o Heroic abre e pergunta se quer instalar. Confirme na tela.
+- **Desinstalar:** jogos da Epic são desinstalados direto pelo legendary. Nos de GOG e Amazon o
+  Heroic abre: escolha o jogo e use Desinstalar.
 
 Jogos sem login não aparecem até você entrar na conta no Heroic.
+
+## Downloads e espaço em disco
+
+A aba **Downloads** do portal mostra:
+
+- **Espaço em disco:** quanto sobra em cada disco usado pela Steam, pela Epic, pelas ROMs e pelo
+  AllGames (um cartão por disco físico).
+- **Cada download:** porcentagem, quanto já veio, velocidade e tempo restante. Quando o jogo
+  **não cabe** no espaço livre, aparece o aviso em amarelo ("Não cabe: faltam 165 GB e o disco tem
+  20 GB livres"). A aba ganha um número quando há downloads em andamento, e as capas dos jogos
+  baixando mostram "Baixando 37%".
+
+Exemplo: você mandou baixar o God of War Ragnarök na Steam, mas o disco está quase cheio. A aba
+mostra o download, a porcentagem parada e o aviso de que não cabe. Libere espaço (ou mude a
+biblioteca da Steam para outro disco) e ele continua de onde parou.
+
+**Pausar e continuar:**
+
+- **Epic:** botões **Pausar**, **Continuar** e **Parar** no próprio portal. Pausado, o download
+  continua de onde parou, mesmo depois de reiniciar o PC.
+- **Steam:** a Steam não deixa outro programa pausar os downloads dela, então o portal mostra o
+  progresso e o botão **Abrir downloads da Steam** abre a tela de downloads dela, onde dá para
+  pausar e retomar (pela tela do celular mesmo).
+- **GOG e Amazon:** o progresso aparece dentro do Heroic.
+
+**Baixar enquanto joga outro jogo:** os downloads da Epic rodam separados do jogo e continuam. Na
+Steam, ligue **Configurações → Downloads → "Permitir downloads durante o jogo"**; sem isso a Steam
+pausa os downloads quando um jogo abre.
+
+**Onde os jogos ficam:** no Docker, na pasta `JOGOS` do `docker/.env` (`GameLibrary/Steam` e
+`Epic`). Sem Docker, nas bibliotecas da Steam e, para a Epic, em `~/Games/Heroic` ou na pasta que
+você escolher:
+
+```toml
+# ~/AllGames/config.toml
+[epic]
+pasta = "/mnt/hd-grande/Epic"
+```
 
 ## Ubisoft Connect
 

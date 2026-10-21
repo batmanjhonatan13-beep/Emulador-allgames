@@ -23,6 +23,16 @@ else
   flatpak install --user -y --noninteractive flathub com.heroicgameslauncher.hgl
 fi
 
+# legendary: o AllGames baixa os jogos da Epic por ele, com progresso e pausa no portal.
+if command -v legendary >/dev/null; then
+  msg "legendary já instalado"
+else
+  msg "Instalando o legendary (downloads da Epic pelo portal)"
+  command -v pipx >/dev/null || sudo apt-get install -y pipx
+  pipx install legendary-gl
+  pipx ensurepath >/dev/null
+fi
+
 cat <<'FIM'
 
 Pronto! Agora, no PC (uma vez só):

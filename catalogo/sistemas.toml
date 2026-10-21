@@ -30,11 +30,11 @@
 #   baixar      "eden": `allgames emuladores instalar` baixa o AppImage sozinho
 #   combo_sair  true: segurar Select+Start fecha o emulador (o RetroArch já faz
 #               isso sozinho, salvando o estado)
+#   aviso       observação mostrada no portal e em `allgames emuladores`
 #
 # Clique e joga: quase tudo roda no RetroArch, que já vem configurado para
 # salvar o estado ao sair (Select+Start, como no R36S) e voltar de onde parou
 # na próxima vez. Os emuladores avulsos ficam para o que o RetroArch não roda.
-#   aviso       observação mostrada no portal e em `allgames emuladores`
 #
 # Nada aqui baixa ROMs, BIOS, chaves ou firmware: você usa os do seu console.
 
@@ -100,6 +100,7 @@ appimage = "switch"
 baixar = "eden"
 combo_sair = true
 comando = ["{emulador}", "-f", "-g", "{rom}"]
+saves = ["~/.local/share/eden/nand/user/save/**/*"]
 # Se o nome do AppImage tiver uma destas palavras, usa o comando correspondente.
 alternativas = { ryujinx = ["{emulador}", "--fullscreen", "{rom}"], ryubing = ["{emulador}", "--fullscreen", "{rom}"] }
 aviso = "Coloque em ~/AllGames/roms/bios/switch as chaves (prod.keys e title.keys) e a pasta firmware tiradas do SEU Switch: o AllGames instala no Eden sozinho. Na primeira vez, escolha o controle em Emulação → Configurar → Controles."

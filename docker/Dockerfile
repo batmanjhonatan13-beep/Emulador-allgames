@@ -6,7 +6,8 @@
 # Por cima entram o AllGames (portal, catálogo, ROMs, downloads), o PortMaster
 # e o legendary (Epic). Os emuladores e o Heroic são instalados na primeira vez
 # que o container liga (ficam no volume da home, não precisam ser baixados de novo).
-FROM josh5/steam-headless:2.44.20261019.1
+ARG BASE=josh5/steam-headless:2.44.20261019.1
+FROM ${BASE}
 
 # Bibliotecas que os ports do PortMaster usam e o pip para o legendary.
 RUN dnf install -y --setopt=install_weak_deps=False \

@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import caminhos, portal, sunshine
+from . import caminhos, downloads, portal, portmaster, sunshine
 
 
 def _rodar(*cmd: str) -> str:
@@ -34,7 +34,14 @@ def _python() -> tuple[bool, str, str]:
     return ok, f"Python {sys.version.split()[0]}", "" if ok else "precisa do Python 3.10 ou mais novo"
 
 
+SUNSHINE_DOCKER = Path("/usr/local/libexec/steam-headless/sunshine")
+
+
 def _sunshine_instalado() -> tuple[bool, str, str]:
+    if caminhos.no_docker():
+        if SUNSHINE_DOCKER.exists():
+            return True, "Sunshine da imagem Docker (captura pela tela virtual do KWin)", ""
+        return False, "Sunshine não encontrado na imagem", "reconstrua a imagem: docker compose build --pull"
     binario = shutil.which("sunshine")
     if not binario:
         return False, "Sunshine não encontrado", "rode scripts/instalar-host.sh"
@@ -49,6 +56,8 @@ def _sunshine_rodando() -> tuple[bool, str, str]:
     nome = sunshine.servico_ativo()
     if nome:
         return True, f"serviço {nome} ativo — painel em https://localhost:47990", ""
+    if caminhos.no_docker():
+        return False, "Sunshine parado", "termine a configuração em http://IP-DO-PC:8483 (ele só liga depois disso)"
     return False, "serviço do Sunshine parado", "systemctl --user enable --now app-dev.lizardbyte.app.Sunshine"
 
 
@@ -56,6 +65,12 @@ def _codificador() -> tuple[bool, str, str]:
     if shutil.which("nvidia-smi"):
         gpu = _rodar("nvidia-smi", "--query-gpu=name", "--format=csv,noheader").splitlines()
         return True, f"NVIDIA {gpu[0] if gpu else ''} → NVENC", ""
+    if caminhos.no_docker():
+        # Na imagem o próprio Sunshine escolhe VA-API pela GPU que recebeu.
+        placas = sorted(str(p) for p in Path("/dev/dri").glob("renderD*"))
+        if placas:
+            return True, f"GPU {placas[0]} → VA-API", ""
+        return False, "o container não recebeu a GPU", "confira GPU= no docker/.env (ex.: /dev/dri/renderD128)"
     if shutil.which("vainfo"):
         saida = _rodar("vainfo")
         if "VAEntrypointEncSlice" in saida or "VAEntrypointEncSliceLP" in saida:
@@ -71,6 +86,8 @@ def _codificador() -> tuple[bool, str, str]:
 def _entrada() -> tuple[bool, str, str]:
     if os.access("/dev/uinput", os.W_OK):
         return True, "/dev/uinput liberado (controle virtual funciona)", ""
+    if caminhos.no_docker():
+        return False, "sem acesso a /dev/uinput", "o docker-compose precisa passar /dev/uinput (veja docs/DOCKER.md)"
     usuario = pwd.getpwuid(os.getuid()).pw_name
     try:
         no_grupo = usuario in grp.getgrnam("input").gr_mem
@@ -83,6 +100,11 @@ def _entrada() -> tuple[bool, str, str]:
 
 
 def _tailscale() -> tuple[bool, str, str]:
+    if caminhos.no_docker():
+        # O Tailscale fica no PC; com a rede "host" o container enxerga a interface dele.
+        if Path("/sys/class/net/tailscale0").exists():
+            return True, "Tailscale do PC ativo (dá para jogar fora de casa)", ""
+        return False, "Tailscale não está no PC (só joga na mesma rede Wi-Fi)", "no PC: scripts/instalar-tailscale.sh"
     if not shutil.which("tailscale"):
         return False, "Tailscale não instalado (só joga na mesma rede Wi-Fi)", "rode scripts/instalar-tailscale.sh"
     ip = _rodar("tailscale", "ip", "-4")
@@ -105,6 +127,23 @@ def _pastas() -> tuple[bool, str, str]:
     return True, f"originais em {pasta} ({sum(1 for _ in pasta.iterdir())} arquivos)", ""
 
 
+def _portmaster() -> tuple[bool, str, str]:
+    if not portmaster.instalado():
+        return False, "PortMaster não instalado", "rode scripts/instalar-portmaster.sh (no Docker já vem pronto)"
+    ports = sum(1 for _ in portmaster.pasta_ports().glob("*.sh")) if portmaster.pasta_ports().is_dir() else 0
+    return True, f"PortMaster em {portmaster.pasta_ferramentas()} ({ports} ports instalados)", ""
+
+
+def _epic() -> tuple[bool, str, str]:
+    if not downloads.legendary():
+        return (
+            False,
+            "sem legendary: a Epic baixa só pelo Heroic",
+            "pipx install legendary-gl (no Docker já vem pronto)",
+        )
+    return True, f"downloads da Epic pelo portal (jogos em {downloads.pasta_epic()})", ""
+
+
 VERIFICACOES = [
     ("Sistema", _sistema),
     ("Python", _python),
@@ -114,6 +153,8 @@ VERIFICACOES = [
     ("Controles", _entrada),
     ("Acesso remoto", _tailscale),
     ("Portal", _portal),
+    ("PortMaster", _portmaster),
+    ("Epic", _epic),
     ("Jogos", _pastas),
 ]
 

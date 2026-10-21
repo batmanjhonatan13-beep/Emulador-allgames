@@ -340,7 +340,7 @@ def _baixar_eden(pasta: Path) -> Path:
                     temporario.chmod(0o755)
                     temporario.replace(destino)
                     for antigo in pasta.glob("*.AppImage"):
-                        if antigo != destino:
+                        if antigo != destino and "eden" in antigo.name.lower():
                             antigo.unlink()
                 return destino
         erros.append(f"{api}: nenhum AppImage para Linux na última versão")
@@ -464,9 +464,11 @@ def instalar(alvos: list[str], dados=None, todos: bool = False) -> list[str]:
             if emulador.appimage:
                 pasta = emuladores_dir() / emulador.appimage
                 pasta.mkdir(parents=True, exist_ok=True)
-                if emulador.baixar == "eden":
+                atual = appimage(emulador)
+                # Atualiza o Eden, mas respeita outro emulador que você tenha colocado na pasta.
+                if emulador.baixar == "eden" and (not atual or "eden" in atual.name.lower()):
                     _baixar_eden(pasta)
-                elif not appimage(emulador):
+                elif not atual:
                     avisos.append(f"{sistema.nome}: {emulador.aviso}")
                 if sistema.id == "switch" and not (bios_dir() / "switch/prod.keys").exists():
                     avisos.append(f"{sistema.nome}: {emulador.aviso}")

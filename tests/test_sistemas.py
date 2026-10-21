@@ -87,6 +87,10 @@ class Pastas(unittest.TestCase):
         self.assertTrue(argv[argv.index("-L") + 1].endswith("cores/snes9x_libretro.so"))
         cfg = Path(argv[argv.index("--appendconfig") + 1]).read_text()
         self.assertIn('savefiles_in_content_dir = "true"', cfg)
+        # Clique e joga como no R36S: sair salva, abrir continua, Select+Start sai
+        self.assertIn('savestate_auto_save = "true"', cfg)
+        self.assertIn('savestate_auto_load = "true"', cfg)
+        self.assertIn('input_quit_gamepad_combo = "4"', cfg)
         self.assertIn(str(self.roms / "bios"), cfg)
         # o save com [b1] no nome é achado (o colchete não vira curinga)
         rom.with_suffix(".srm").write_text("save")
@@ -105,6 +109,32 @@ class Pastas(unittest.TestCase):
         (pasta / "ryujinx-1.3.AppImage").touch()
         self.assertEqual(sistemas.comando(jogo, self.dados)[1], "--fullscreen")
 
+    def test_switch_recebe_chaves_e_firmware_da_pasta_bios(self):
+        self._rom("bios/switch/prod.keys", "chaves")
+        self._rom("bios/switch/firmware/abc.nca", "fw")
+        self._rom("switch/Jogo.nsp")
+        (self.home / "AllGames/emuladores/switch").mkdir(parents=True)
+        (self.home / "AllGames/emuladores/switch/Eden-Linux.AppImage").touch()
+        (jogo,) = sistemas.jogos(self.dados)
+        sistemas.comando(jogo, self.dados)
+        eden = self.home / ".local/share/eden"
+        self.assertEqual((eden / "keys/prod.keys").read_text(), "chaves")
+        self.assertTrue((eden / "nand/system/Contents/registered/abc.nca").exists())
+
+    def test_xemu_configurado_com_os_arquivos_do_xbox(self):
+        self._rom("bios/xbox/mcpx_1.0.bin")
+        self._rom("bios/xbox/Complex_4627.bin")
+        self._rom("bios/xbox/xbox_hdd.qcow2")
+        config = sistemas.configurar_xemu()
+        texto = config.read_text()
+        self.assertIn(f'bootrom_path = "{self.roms}/bios/xbox/mcpx_1.0.bin"', texto)
+        self.assertIn(f'flashrom_path = "{self.roms}/bios/xbox/Complex_4627.bin"', texto)
+        self.assertIn(f'hdd_path = "{self.roms}/bios/xbox/xbox_hdd.qcow2"', texto)
+        self.assertIn("show_welcome = false", texto)
+        # mantém o que já estava configurado no xemu
+        config.write_text(texto + '\n[input.bindings]\nport1 = "pad"\n')
+        self.assertIn('port1 = "pad"', sistemas.configurar_xemu().read_text())
+
     def test_preparar_pastas(self):
         self._rom("megadrive/Jogo.md")
         sistemas.preparar_pastas(self.dados)
@@ -113,6 +143,21 @@ class Pastas(unittest.TestCase):
         self.assertFalse((self.roms / "genesis").exists(), "já existe a pasta megadrive")
         self.assertTrue((self.roms / "bios").is_dir())
         self.assertTrue((self.home / "AllGames/emuladores/switch").is_dir())
+
+    def test_eden_e_atualizado_mas_outro_emulador_e_respeitado(self):
+        pasta = self.home / "AllGames/emuladores/switch"
+        with mock.patch.object(sistemas, "_baixar_eden") as baixar:
+            sistemas.instalar(["switch"], self.dados)
+            self.assertEqual(baixar.call_count, 1)
+            pasta.mkdir(parents=True, exist_ok=True)
+            (pasta / "Eden-Linux-v0.1.AppImage").touch()
+            sistemas.instalar(["switch"], self.dados)
+            self.assertEqual(baixar.call_count, 2)
+            (pasta / "Eden-Linux-v0.1.AppImage").unlink()
+            (pasta / "ryujinx-1.3.AppImage").touch()
+            avisos = sistemas.instalar(["switch"], self.dados)
+            self.assertEqual(baixar.call_count, 2)
+        self.assertTrue(any("prod.keys" in a for a in avisos))
 
     def test_instalar_alvo_desconhecido(self):
         with self.assertRaisesRegex(ValueError, "não conheço"):

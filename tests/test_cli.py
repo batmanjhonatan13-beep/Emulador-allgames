@@ -45,6 +45,12 @@ class Sincronizar(unittest.TestCase):
         self.assertIsNone(parser.parse_args(["sincronizar"]).gamescope)
         self.assertTrue(parser.parse_args(["sincronizar", "--gamescope"]).gamescope)
         self.assertFalse(parser.parse_args(["sincronizar", "--no-gamescope"]).gamescope)
+        busca = parser.parse_args(["portmaster", "2048"])
+        self.assertEqual((busca.acao, busca.ports), ("buscar", ["2048"]))
+        instalar = parser.parse_args(["portmaster", "instalar", "2048", "celeste.zip"])
+        self.assertEqual((instalar.acao, instalar.ports), ("instalar", ["2048", "celeste.zip"]))
+        self.assertTrue(parser.parse_args(["preparar", "--lojas"]).lojas)
+        self.assertTrue(parser.parse_args(["emuladores", "instalar", "--todos"]).todos)
 
 
 if __name__ == "__main__":

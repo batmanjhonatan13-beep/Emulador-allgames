@@ -79,6 +79,17 @@ class Portal(unittest.TestCase):
         self.assertEqual(self._pedir("/capa?id=b")[0], 404)
         self.assertEqual(self._pedir("/capa?id=../../etc/passwd")[0], 404)
 
+    def test_downloads_e_discos(self):
+        status, corpo = self._pedir("/api/downloads")
+        dados = json.loads(corpo)
+        self.assertEqual(status, 200)
+        self.assertIsInstance(dados["downloads"], list)
+        self.assertTrue(all(d["livre"] <= d["total"] for d in dados["discos"]))
+        status, corpo = self._pedir("/api/download?id=epic:nada&acao=pausar", "POST")
+        self.assertEqual(status, 409)
+        self.assertIn("não encontrado", json.loads(corpo)["erro"])
+        self.assertEqual(self._pedir("/api/download?id=epic:nada&acao=pausar", "POST", cabecalho=False)[0], 403)
+
     def test_acoes(self):
         jogos = {j["id"]: j for j in json.loads(self._pedir("/api/jogos")[1])["jogos"]}
         self.assertEqual(jogos["a"]["acoes"], ["jogar"])

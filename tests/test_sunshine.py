@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from allgames import caminhos, sunshine
 from allgames.catalogo import Jogo
@@ -81,6 +82,28 @@ class Arquivo(unittest.TestCase):
         backup = sunshine.gravar(arquivo, {"apps": []})
         self.assertEqual(json.loads(backup.read_text())["apps"][0]["name"], "Desktop")
         self.assertEqual(json.loads(arquivo.read_text()), {"apps": []})
+
+
+class Servico(unittest.TestCase):
+    def _systemctl(self, ativo):
+        def run(argv, **_):
+            return mock.Mock(stdout="active\n" if argv[-1] == ativo else "inactive\n", returncode=0)
+
+        return mock.patch("subprocess.run", side_effect=run)
+
+    def test_sunshine_do_docker(self):
+        with (
+            mock.patch("shutil.which", return_value="/usr/bin/systemctl"),
+            self._systemctl(sunshine.SERVICO_DOCKER) as run,
+        ):
+            self.assertEqual(sunshine.servico_ativo(), sunshine.SERVICO_DOCKER)
+            self.assertTrue(sunshine.reiniciar())
+        self.assertEqual(run.call_args.args[0], ["systemctl", "restart", sunshine.SERVICO_DOCKER])
+
+    def test_sunshine_do_usuario(self):
+        with mock.patch("shutil.which", return_value="/usr/bin/systemctl"), self._systemctl("sunshine") as run:
+            self.assertTrue(sunshine.reiniciar())
+        self.assertEqual(run.call_args.args[0], ["systemctl", "--user", "restart", "sunshine"])
 
 
 if __name__ == "__main__":

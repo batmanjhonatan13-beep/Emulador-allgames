@@ -557,11 +557,13 @@ main {
 
 .disco small {
   color: var(--texto-3);
+  overflow-wrap: anywhere;
 }
 
 .disco-topo,
 .download-topo {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.6rem;
@@ -834,7 +836,7 @@ body.saindo {
   }
 
   .relogio,
-  .pilula {
+  .topo .pilula {
     display: none;
   }
 

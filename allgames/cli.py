@@ -142,6 +142,7 @@ def cmd_doutor(jogos, args) -> int:
 
 def cmd_roms(jogos, args) -> int:
     dados = sistemas.carregar()
+    caminhos.originais().mkdir(parents=True, exist_ok=True)
     criadas = sistemas.preparar_pastas(dados)
     if criadas:
         print(f"Pastas criadas em {sistemas.roms_dir()} (os mesmos nomes do ArkOS).\n")
@@ -196,6 +197,7 @@ def cmd_preparar(jogos, args) -> int:
     """Deixa tudo pronto para clicar e jogar (é o que o Docker roda ao ligar)."""
     print(time.strftime("== %d/%m/%Y %H:%M:%S: preparando o AllGames"))
     dados = sistemas.carregar()
+    caminhos.originais().mkdir(parents=True, exist_ok=True)
     criadas = sistemas.preparar_pastas(dados)
     if criadas:
         print(f"Pastas de ROMs criadas em {sistemas.roms_dir()}")
@@ -214,6 +216,15 @@ def cmd_preparar(jogos, args) -> int:
         print(f"! {aviso}")
     print("== pronto")
     return 0
+
+
+class _AcaoDoPortmaster(argparse.Action):
+    """A primeira palavra é a ação (instalar, desinstalar) ou já faz parte da busca."""
+
+    def __call__(self, parser, namespace, valores, option_string=None):
+        if valores and valores[0] in ("buscar", "instalar", "desinstalar"):
+            namespace.acao, valores = valores[0], valores[1:]
+        setattr(namespace, self.dest, valores)
 
 
 def cmd_portmaster(jogos, args) -> int:
@@ -352,10 +363,13 @@ def montar_parser() -> argparse.ArgumentParser:
     p.add_argument("--sem-emuladores", action="store_true")
     p.set_defaults(func=cmd_preparar)
 
-    p = sub.add_parser("portmaster", help="pesquisa, instala e desinstala ports do PortMaster")
-    p.add_argument("acao", nargs="?", choices=["buscar", "instalar", "desinstalar"], default="buscar")
-    p.add_argument("ports", nargs="*", metavar="PORT_OU_BUSCA")
-    p.set_defaults(func=cmd_portmaster)
+    p = sub.add_parser(
+        "portmaster",
+        help="pesquisa, instala e desinstala ports do PortMaster",
+        description="allgames portmaster [busca] | instalar PORT... | desinstalar PORT...",
+    )
+    p.add_argument("ports", nargs="*", metavar="PORT_OU_BUSCA", action=_AcaoDoPortmaster)
+    p.set_defaults(func=cmd_portmaster, acao="buscar")
 
     p = sub.add_parser("portal", help="tela com as capas dos jogos, estilo Game Pass")
     p.add_argument("--kiosk", action="store_true", help="abre o navegador em tela cheia (é o que o Sunshine usa)")

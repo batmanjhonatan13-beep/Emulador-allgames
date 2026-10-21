@@ -18,5 +18,7 @@ jobs:
         run: pipx run ruff check . && pipx run ruff format --check .
       - name: ShellCheck
         run: |
-          shellcheck -x scripts/*.sh
+          shellcheck -x scripts/*.sh docker/*.sh
           cd receitas && shellcheck -s bash ./*.sh
+      - name: Docker Compose
+        run: cp docker/.env.exemplo docker/.env && docker compose -f docker/docker-compose.yml config --quiet
