@@ -7,7 +7,11 @@ Antes de cada partida o AllGames copia esses arquivos para
 ~/AllGames/backups/<id>/<data>, guardando as últimas cópias.
 """
 
+import bisect
+import fnmatch
 import hashlib
+import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +21,39 @@ from .catalogo import Jogo
 
 BACKUPS_POR_JOGO = 10
 _ASSINATURA = ".assinatura"
+_CORINGA = re.compile(r"[*?[]")
+
+
+class Pastas:
+    """Conteúdo de cada pasta, lido uma vez só.
+
+    Com milhares de ROMs numa pasta, procurar "Jogo.state*" com glob relê a pasta
+    inteira a cada ROM. O portal usa uma Pastas por atualização da lista.
+    """
+
+    def __init__(self):
+        self._nomes: dict[str, list[str]] = {}
+
+    def nomes(self, pasta: str) -> list[str]:
+        if pasta not in self._nomes:
+            try:
+                self._nomes[pasta] = sorted(os.listdir(pasta))
+            except OSError:
+                self._nomes[pasta] = []
+        return self._nomes[pasta]
+
+    def buscar(self, pasta: str, padrao: str) -> list[Path]:
+        """Como glob(pasta/padrao) para um padrão sem "/": só olha os nomes com o mesmo começo."""
+        nomes = self.nomes(pasta)
+        prefixo = _CORINGA.split(padrao, 1)[0]
+        achados = []
+        for i in range(bisect.bisect_left(nomes, prefixo), len(nomes)):
+            nome = nomes[i]
+            if not nome.startswith(prefixo):
+                break
+            if fnmatch.fnmatchcase(nome, padrao) and (padrao.startswith(".") or not nome.startswith(".")):
+                achados.append(Path(pasta, nome))
+        return achados
 
 
 def _base_e_padrao(jogo: Jogo, padrao: str) -> tuple[Path, str]:
@@ -27,17 +64,21 @@ def _base_e_padrao(jogo: Jogo, padrao: str) -> tuple[Path, str]:
     return jogo.pasta, padrao
 
 
-def arquivos(jogo: Jogo) -> list[Path]:
+def arquivos(jogo: Jogo, pastas: Pastas | None = None) -> list[Path]:
+    pastas = pastas or Pastas()
     encontrados = set()
     for padrao in jogo.saves:
         base, relativo = _base_e_padrao(jogo, padrao)
-        if base.is_dir():
+        pasta, _, nome = str(base / relativo).rpartition("/")
+        if not _CORINGA.search(pasta) and "**" not in nome:
+            encontrados.update(p for p in pastas.buscar(pasta or "/", nome) if p.is_file())
+        elif base.is_dir():
             encontrados.update(p for p in base.glob(relativo) if p.is_file())
     return sorted(encontrados)
 
 
-def ultimo_save(jogo: Jogo) -> float | None:
-    return max((p.stat().st_mtime for p in arquivos(jogo)), default=None)
+def ultimo_save(jogo: Jogo, pastas: Pastas | None = None) -> float | None:
+    return max((p.stat().st_mtime for p in arquivos(jogo, pastas)), default=None)
 
 
 def _no_backup(jogo: Jogo, arquivo: Path) -> Path:

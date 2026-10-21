@@ -22,6 +22,7 @@ const estado = {
   aba: "inicio",
   filtro: "todos",
   busca: "",
+  limiteGrade: 0, // quantos cartões a grade da Biblioteca mostra (cresce com "Mostrar mais")
   temControle: false,
   focado: null,
   inicioPartida: 0,
@@ -160,6 +161,8 @@ function renderizar() {
   const idFocado = estado.focado?.dataset.id;
   renderizarDestaque();
   renderizarFileiras();
+  renderizarRecentes();
+  renderizarInstalados();
   renderizarBiblioteca();
   $("#sair").hidden = !estado.podeSair;
   const alvo = idFocado && document.querySelector(`.visao:not([hidden]) [data-id="${CSS.escape(idFocado)}"]`);
@@ -220,6 +223,7 @@ function linhaSave(jogo) {
 }
 
 const LIMITE_FILEIRA = 30;
+const PAGINA_GRADE = 120;
 
 function fileira(titulo, jogos, filtro = null) {
   if (!jogos.length) return null;
@@ -232,6 +236,7 @@ function fileira(titulo, jogos, filtro = null) {
             "data-nav": true,
             onclick: () => {
               estado.filtro = filtro;
+              estado.limiteGrade = 0;
               renderizarBiblioteca();
               trocarAba("biblioteca");
               focar($(`[data-filtro="${CSS.escape(filtro)}"]`), false);
@@ -262,6 +267,31 @@ function renderizarFileiras() {
       ...colecoes.map((c) => fileira(c, jogos.filter((j) => j.colecao === c), `c:${c}`)),
       fileira("Outros jogos", jogos.filter((j) => !j.colecao)),
     ].filter(Boolean),
+  );
+}
+
+// Todos os jogos que você já abriu, do mais recente para o mais antigo.
+function renderizarRecentes() {
+  const jogados = estado.jogos.filter((j) => j.jogado_em).sort((a, b) => b.jogado_em.localeCompare(a.jogado_em));
+  $("#grade-recentes").replaceChildren(
+    ...(jogados.length
+      ? jogados.slice(0, PAGINA_GRADE).map(cartao)
+      : [el("p", { class: "vazio" }, "Os jogos que você abrir aparecem aqui.")]),
+  );
+}
+
+// O que você instalou (Steam, Epic, GOG, PortMaster, catálogo), como a biblioteca da Steam:
+// o que está baixando no alto e, embaixo, o que já dá para abrir. As ROMs ficam na Biblioteca.
+function renderizarInstalados() {
+  const instalando = estado.jogos.filter((j) => j.tarefa === "instalando" || (j.download && j.download.estado !== "concluido"));
+  const instalados = estado.jogos
+    .filter((j) => j.origem !== "rom" && j.instalado && !instalando.includes(j))
+    .sort((a, b) => (b.jogado_em || "").localeCompare(a.jogado_em || "") || a.nome.localeCompare(b.nome));
+  $("#instalando").replaceChildren(...(instalando.length ? [fileira("Instalando agora", instalando)] : []));
+  $("#grade-instalados").replaceChildren(
+    ...(instalados.length
+      ? instalados.map(cartao)
+      : [el("p", { class: "vazio" }, "Os jogos que você instalar (Steam, Epic, PortMaster) aparecem aqui.")]),
   );
 }
 
@@ -297,6 +327,7 @@ function renderizarBiblioteca() {
           "data-filtro": id,
           onclick: () => {
             estado.filtro = id;
+            estado.limiteGrade = 0;
             renderizarBiblioteca();
             focar($(`[data-filtro="${CSS.escape(id)}"]`), false);
           },
@@ -307,7 +338,28 @@ function renderizarBiblioteca() {
   );
   const termo = normalizar(estado.busca);
   const jogos = estado.jogos.filter(atual[2]).filter((j) => !termo || normalizar(`${j.nome} ${j.plataforma}`).includes(termo));
-  $("#grade").replaceChildren(...(jogos.length ? jogos.map(cartao) : [el("p", { class: "vazio" }, "Nenhum jogo aqui.")]));
+  if (!jogos.length) return $("#grade").replaceChildren(el("p", { class: "vazio" }, "Nenhum jogo aqui."));
+  // Com milhares de ROMs, desenhar tudo de uma vez trava a tela e a navegação pelo controle.
+  const limite = Math.max(estado.limiteGrade, PAGINA_GRADE);
+  const restantes = jogos.length - limite;
+  const mais =
+    restantes > 0
+      ? el(
+          "button",
+          {
+            class: "cartao cartao-mais",
+            "data-nav": true,
+            onclick: () => {
+              estado.limiteGrade = limite + PAGINA_GRADE;
+              renderizarBiblioteca();
+              focar($("#grade").children[limite]);
+            },
+          },
+          el("span", { class: "arte" }, el("span", { class: "iniciais" }, `+${restantes}`)),
+          el("span", { class: "legenda" }, el("span", { class: "nome" }, "Mostrar mais")),
+        )
+      : null;
+  $("#grade").replaceChildren(...jogos.slice(0, limite).map(cartao), ...(mais ? [mais] : []));
 }
 
 function trocarAba(aba) {
@@ -465,6 +517,7 @@ function mostrarJogando(jogo) {
       el("div", { class: "girando" }),
       el("h2", {}, `Jogando ${jogo.nome}`),
       el("p", {}, "O jogo abriu no PC. Quando você sair dele, volta para cá."),
+      el("p", { class: "dica-sair" }, "Para sair do jogo: segure Select + Start (no controle ou nos botões da tela do Moonlight)."),
       el("p", { class: "save", html: ICONES.disco }, "O progresso é salvo no PC, com cópia de segurança antes de cada partida."),
       el("button", { class: "botao", onclick: () => api("/api/encerrar", "POST") }, "Encerrar o jogo"),
     ),
@@ -543,7 +596,7 @@ function acao(nome) {
   if (nome === "a") estado.focado?.click();
   else if (nome === "b") camadaAberta() ? fecharCamada() : estado.aba !== "inicio" && trocarAba("inicio");
   else if (nome === "lb" || nome === "rb") {
-    const abas = ["inicio", "biblioteca", "downloads"];
+    const abas = ["inicio", "recentes", "instalados", "biblioteca", "downloads"];
     const i = abas.indexOf(estado.aba) + (nome === "rb" ? 1 : -1);
     trocarAba(abas[(i + abas.length) % abas.length]);
   }
@@ -730,10 +783,19 @@ function acaoDownload(download, acao) {
 
 $("#busca").addEventListener("input", (evento) => {
   estado.busca = evento.target.value;
+  estado.limiteGrade = 0;
   renderizarBiblioteca();
 });
 // Com o controle, "A" na busca abre o teclado (o do Moonlight, no celular).
 $("#busca").addEventListener("click", (evento) => evento.target.focus());
+
+// A Steam abre em tela cheia (Big Picture), como no botão Guide do controle.
+// Para voltar: segure Select + Start.
+$("#abrir-steam").addEventListener("click", () => {
+  api("/api/steam", "POST")
+    .then(() => mensagem("Abrindo a Steam. Para voltar ao AllGames, segure Select + Start."))
+    .catch((erro) => mensagem(`Não deu: ${erro.message}`));
+});
 
 $("#sair").addEventListener("click", () => {
   api("/api/sair", "POST").catch(() => {});

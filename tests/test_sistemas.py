@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,6 +96,71 @@ class Pastas(unittest.TestCase):
         # o save com [b1] no nome é achado (o colchete não vira curinga)
         rom.with_suffix(".srm").write_text("save")
         self.assertEqual([p.name for p in saves.arquivos(jogo)], ["Jogo [b1].srm"])
+
+    def test_copias_repetidas_somem_da_lista(self):
+        self._rom("gb/Tetris (World).zip", "tetris")
+        self._rom("gb/gb/Tetris (World) - Copy.zip", "tetris")
+        self._rom("gb/gb/Tetris (World).zip", "tetris")  # o mesmo arquivo em outra pasta
+        for i in range(3):
+            self._rom(f"gb/gb/Super Breakout (USA) - Copy ({i}) - Copy - Copy.zip", "breakout")
+        # Mesmo nome, jogo diferente (o "Monopoly" de GBC dentro da pasta de GBA): fica.
+        self._rom("gb/Monopoly (USA).zip", "monopoly de gb")
+        self._rom("gb/gbc/Monopoly (USA).zip", "monopoly de gbc, outro tamanho")
+        jogos = sistemas.jogos(self.dados)
+        self.assertEqual(sorted(j.nome for j in jogos), ["Monopoly", "Monopoly", "Super Breakout", "Tetris"])
+        tetris = next(j for j in jogos if j.nome == "Tetris")
+        self.assertEqual(tetris.extra["rom"], str(self.roms / "gb/Tetris (World).zip"))
+        breakout = next(j for j in sistemas.jogos(self.dados) if j.nome == "Super Breakout")
+        self.assertTrue(breakout.capa.endswith("/Super Breakout (USA)"))
+
+    def test_nome_e_capa_do_emulationstation_do_arkos(self):
+        self._rom("neogeo/neogeo.zip")  # a BIOS não aparece como jogo
+        self._rom("neogeo/sonicwi3.zip")
+        self._rom("neogeo/kof97.zip")
+        imagem = self.roms / "neogeo/downloaded_images/kof97-image.png"
+        imagem.parent.mkdir(parents=True)
+        imagem.write_bytes(b"png")
+        (self.roms / "neogeo/boxart").mkdir()
+        (self.roms / "neogeo/boxart/sw3.png").write_bytes(b"png")
+        (self.roms / "neogeo/gamelist.xml").write_text(
+            "<gameList><game><path>./sonicwi3.zip</path><name>Aero Fighters 3 (set 1)</name>"
+            "<image>./boxart/sw3.png</image></game></gameList>"
+        )
+        jogos = {j.extra["rom"].rsplit("/", 1)[1]: j for j in sistemas.jogos(self.dados)}
+        self.assertNotIn("neogeo.zip", jogos)
+        self.assertEqual(jogos["sonicwi3.zip"].nome, "Aero Fighters 3")
+        self.assertEqual(jogos["sonicwi3.zip"].extra["capa_local"], str(self.roms / "neogeo/boxart/sw3.png"))
+        # Sem entrada no gamelist: a imagem do scraper com o nome da ROM.
+        self.assertEqual(jogos["kof97.zip"].extra["capa_local"], str(imagem))
+
+    def test_perfil_do_controle_do_moonlight_e_os_que_vem_com_o_retroarch(self):
+        estoque = self.home / ".local/share/flatpak" / sistemas._PERFIS_DO_FLATPAK / "udev"
+        estoque.mkdir(parents=True)
+        (estoque / "Microsoft X-Box 360 pad.cfg").write_text('input_device = "Microsoft X-Box 360 pad"\n')
+        self._rom("psx/Crash.pbp")
+        (jogo,) = sistemas.jogos(self.dados)
+        argv = sistemas.comando(jogo, self.dados)
+        cfg = Path(argv[argv.index("--appendconfig") + 1]).read_text()
+        pasta = Path(re.search(r'joypad_autoconfig_dir = "([^"]+)"', cfg).group(1)) / "udev"
+        self.assertTrue((pasta / "Microsoft X-Box 360 pad.cfg").exists())
+        perfil = (pasta / "Sunshine X-Box 360 (Moonlight).cfg").read_text()
+        self.assertIn('input_device = "Sunshine (libvirtualhid) X-Box 360 Controller"', perfil)
+        # Quadrado (Y do RetroPad) é o X do controle, que o kernel numera como 3; Start é o 11.
+        self.assertIn('input_y_btn = "3"', perfil)
+        self.assertIn('input_start_btn = "11"', perfil)
+
+    def test_retroarch_usa_vulkan_e_n64_no_parallel_sem_apagar_o_que_voce_mudou(self):
+        self._rom("n64/Jogo.z64")
+        (jogo,) = sistemas.jogos(self.dados)
+        argv = sistemas.comando(jogo, self.dados)
+        cfg = Path(argv[argv.index("--appendconfig") + 1]).read_text()
+        self.assertIn('video_driver = "vulkan"', cfg)
+        opcoes = Path(re.search(r'core_options_path = "([^"]+)"', cfg).group(1))
+        self.assertIn('mupen64plus-rdp-plugin = "parallel"', opcoes.read_text())
+        # Você trocou pelo menu do RetroArch: o AllGames não desfaz.
+        opcoes.write_text('mupen64plus-rdp-plugin = "gliden64"\nmupen64plus-rsp-plugin = "hle"\n')
+        sistemas.comando(jogo, self.dados)
+        self.assertEqual(opcoes.read_text(), 'mupen64plus-rdp-plugin = "gliden64"\nmupen64plus-rsp-plugin = "hle"\n')
 
     def test_switch_usa_o_appimage_e_o_comando_do_ryujinx(self):
         self._rom("switch/Jogo.nsp")

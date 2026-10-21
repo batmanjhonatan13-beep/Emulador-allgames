@@ -3,45 +3,55 @@
 #
 # As opções de segurança e dispositivos são as que o steam-headless 2.x pede
 # para rodar com systemd sem modo privilegiado.
+#
+# Segunda sessão (outro celular com a sua própria tela, controles e Steam, ao mesmo
+# tempo que a primeira): docker compose --profile segunda-sessao up -d
+x-allgames: &allgames
+  image: allgames:latest
+  restart: unless-stopped
+  # Rede do host: o Moonlight acha o PC sozinho e não é preciso mapear portas.
+  network_mode: host
+  tty: true
+  shm_size: 2g
+  pids_limit: 8192
+  stop_signal: SIGRTMIN+3
+  stop_grace_period: 30s
+  cgroup: private
+  security_opt:
+    - writable-cgroups=true
+    - seccomp=unconfined
+    - systempaths=unconfined
+    # Pop!_OS/Ubuntu: o perfil padrão do AppArmor bloqueia as montagens que o
+    # systemd do container faz ao iniciar ("Failed to fork off sandboxing environment").
+    - apparmor=unconfined
+  cap_add: [SYS_ADMIN, SYS_PTRACE, NET_ADMIN, DAC_READ_SEARCH, SYS_NICE]
+  device_cgroup_rules:
+    - "c 13:* rwm"
+  tmpfs:
+    - /run
+    - /run/lock
+    - /tmp
+    - /dev/input:rw,dev,mode=0755
+  devices:
+    - ${GPU:-/dev/dri/renderD128}:/dev/dri/renderD128
+    - /dev/fuse
+    - /dev/uinput
+    - /dev/uhid
+
 services:
   allgames:
+    <<: *allgames
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: allgames:latest
     container_name: allgames
     hostname: ${NOME:-allgames}
-    restart: unless-stopped
-    # Rede do host: o Moonlight acha o PC sozinho e não é preciso mapear portas.
-    network_mode: host
-    tty: true
-    shm_size: 2g
-    pids_limit: 8192
-    stop_signal: SIGRTMIN+3
-    stop_grace_period: 30s
-    cgroup: private
-    security_opt:
-      - writable-cgroups=true
-      - seccomp=unconfined
-      - systempaths=unconfined
-    cap_add: [SYS_ADMIN, SYS_PTRACE, NET_ADMIN, DAC_READ_SEARCH, SYS_NICE]
-    device_cgroup_rules:
-      - "c 13:* rwm"
-    tmpfs:
-      - /run
-      - /run/lock
-      - /tmp
-      - /dev/input:rw,dev,mode=0755
-    devices:
-      - ${GPU:-/dev/dri/renderD128}:/dev/dri/renderD128
-      - /dev/fuse
-      - /dev/uinput
-      - /dev/uhid
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       STEAM_HEADLESS_SESSION_MODE: ${MODO:-desktop}
       ENABLE_STEAM_SYSTEMD_SERVICE: "true"
+      ALLGAMES_TOQUE: ${TOQUE:-sim}
     volumes:
       # Home do container: emuladores, Heroic, saves dos emuladores, configurações.
       - ${DADOS}/home:/home/steamheadless
@@ -49,7 +59,50 @@ services:
       - ${DADOS}/journal:/var/log/journal
       # Jogos da Steam e da Epic (escolha o disco com mais espaço).
       - ${JOGOS}:/mnt/games
+      # Jogos já baixados na Steam instalada direto no Pop!_OS (STEAM_PC no .env): viram
+      # uma biblioteca da Steam do container, sem baixar de novo.
+      - ${STEAM_PC:-${DADOS}/sem-steam-do-pc}:/mnt/games/SteamPC/steamapps
       # Suas ROMs, no formato do ArkOS/R36S (uma pasta por console, BIOS em bios/).
+      - ${ROMS}:/roms
+      - /etc/localtime:/run/host-localtime:ro
+      - /sys/devices/virtual/input:/sys/devices/virtual/input
+
+  # A segunda sessão divide a placa de vídeo e as ROMs com a primeira, mas tem a sua
+  # própria tela virtual, controles, Steam e saves dos emuladores. No Moonlight, ela é
+  # o PC em IP-DO-PC:48989; o painel fica em https://IP-DO-PC:8484.
+  # Ela tem rede própria (o painel exige o Sunshine em 127.0.0.1:47990, que na rede do
+  # host é o da primeira sessão) e publica só as suas portas, iguais dentro e fora.
+  allgames-2:
+    <<: *allgames
+    profiles: [segunda-sessao]
+    container_name: allgames-2
+    hostname: ${NOME:-allgames}-2
+    network_mode: bridge
+    ports:
+      - "8484:8484/tcp"
+      - "8484:8484/udp"
+      - "48984:48984"
+      - "48989:48989"
+      - "48990:48990"
+      - "49010:49010"
+      - "48998-49000:48998-49000/udp"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      STEAM_HEADLESS_SESSION_MODE: ${MODO:-desktop}
+      ENABLE_STEAM_SYSTEMD_SERVICE: "true"
+      ALLGAMES_TOQUE: ${TOQUE:-sim}
+      # Portas próprias: as da primeira sessão já estão em uso (rede do host).
+      ALLGAMES_PORTA: "47801"
+      ALLGAMES_SUNSHINE_PORTA: "48989"
+      ALLGAMES_PAINEL_PORTA: "8484"
+      # O IP do PC na rede, para a área de trabalho do painel (WebRTC) achar o caminho.
+      ALLGAMES_IP: ${IP_DO_PC:-}
+    volumes:
+      - ${DADOS}/sessao-2/home:/home/steamheadless
+      - ${DADOS}/sessao-2/estado:/var/lib/steam-headless
+      - ${DADOS}/sessao-2/journal:/var/log/journal
+      - ${JOGOS}/sessao-2:/mnt/games
       - ${ROMS}:/roms
       - /etc/localtime:/run/host-localtime:ro
       - /sys/devices/virtual/input:/sys/devices/virtual/input

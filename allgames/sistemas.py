@@ -16,6 +16,7 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from xml.etree import ElementTree
 
 try:
     import tomllib
@@ -35,6 +36,8 @@ EDEN_RELEASES = [
 # Preferência de build do Eden para Linux: a PGO é a mais rápida.
 EDEN_ARQUIVOS = [r"amd64.*pgo.*\.AppImage$", r"amd64.*\.AppImage$", r"x86_64.*\.AppImage$"]
 _TAGS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
+# "Jogo (USA) - Copy (12) - Copy - Copy": cópias que cartões de "15 mil jogos" trazem para inflar a contagem.
+_COPIA = re.compile(r"(\s*-\s*Copy(\s*\(\d+\))?)+$", re.I)
 
 
 @dataclass
@@ -118,21 +121,49 @@ def _arquivos(pasta: Path, profundidade: int = 2):
 def roms(sistema: Sistema) -> list[Path]:
     """ROMs do sistema. Discos citados numa playlist .m3u ficam escondidos atrás dela."""
     extensoes = {f".{e.lower()}" for e in sistema.extensoes}
+    # A BIOS que fica junto das ROMs (o neogeo.zip do Neo Geo) não é um jogo.
+    bios = {b.split()[0].lower() for b in sistema.bios}
     encontrados = []
     for pasta in pastas_do_sistema(sistema):
-        arquivos = [a for a in _arquivos(pasta) if a.suffix.lower() in extensoes]
+        arquivos = [a for a in _arquivos(pasta) if a.suffix.lower() in extensoes and a.name.lower() not in bios]
         nas_playlists = set()
         for playlist in (a for a in arquivos if a.suffix.lower() == ".m3u"):
             for linha in playlist.read_text(errors="replace").splitlines():
                 if linha.strip() and not linha.startswith("#"):
                     nas_playlists.add((playlist.parent / linha.strip()).resolve())
-        encontrados += [a for a in arquivos if a.resolve() not in nas_playlists]
-    return encontrados
+        encontrados += [a for a in arquivos if a.resolve() not in nas_playlists] if nas_playlists else arquivos
+    return _sem_repetidos(encontrados)
+
+
+def _sem_repetidos(arquivos: list[Path]) -> list[Path]:
+    """Esconde o mesmo jogo repetido: "Jogo - Copy (2).zip" ou o mesmo arquivo em duas pastas.
+
+    Só some o arquivo de mesmo nome (sem o "- Copy") e mesmo tamanho de outro, então
+    jogos diferentes com o mesmo nome (o "Monopoly" de GBA e o de GBC) continuam.
+    Fica o original, na pasta mais rasa.
+    """
+    grupos: dict[tuple[str, str], list[Path]] = {}
+    for arquivo in arquivos:
+        grupos.setdefault((_COPIA.sub("", arquivo.stem).lower(), arquivo.suffix.lower()), []).append(arquivo)
+    if all(len(grupo) == 1 for grupo in grupos.values()):
+        return arquivos
+    ficam = set()
+    for grupo in grupos.values():
+        tamanhos = set()
+        for arquivo in sorted(grupo, key=lambda a: (bool(_COPIA.search(a.stem)), len(a.parts), str(a))):
+            try:
+                tamanho = arquivo.stat().st_size if len(grupo) > 1 else 0
+            except OSError:
+                continue
+            if tamanho not in tamanhos:
+                tamanhos.add(tamanho)
+                ficam.add(arquivo)
+    return [a for a in arquivos if a in ficam]
 
 
 def nome_bonito(arquivo: Path) -> str:
-    """'Super Mario World (USA) [!].sfc' -> 'Super Mario World'."""
-    return _TAGS.sub("", arquivo.stem).strip() or arquivo.stem
+    """'Super Mario World (USA) [!] - Copy.sfc' -> 'Super Mario World'."""
+    return _TAGS.sub("", _COPIA.sub("", arquivo.stem)).strip() or arquivo.stem
 
 
 # ------------------------------------------------------------------ emuladores instalados
@@ -175,8 +206,68 @@ def _resolver_saves(padroes: list[str], rom: Path) -> list[str]:
     ]
 
 
+# Pastas onde o EmulationStation (ArkOS, R36S) guarda as imagens baixadas pelo scraper.
+_PASTAS_DE_IMAGENS = {"downloaded_images", "boxart", "boxarts", "images", "image", "covers", "media", "snap", "snaps"}
+_EXTENSOES_DE_IMAGEM = {".png", ".jpg", ".jpeg"}
+_cache_es: dict[Path, tuple[tuple, tuple[dict, dict]]] = {}
+
+
+def _caminho_es(pasta: Path, caminho: str) -> Path | None:
+    """Caminho de um gamelist.xml: './x.zip' ou '/roms/snes/x.zip' (no cartão do R36S) -> pasta/x.zip."""
+    caminho = caminho.strip()
+    if not caminho:
+        return None
+    if caminho.startswith("/"):
+        _, achou, resto = caminho.partition(f"/{pasta.name}/")
+        return pasta / resto if achou else Path(caminho)
+    return pasta / caminho.removeprefix("./")
+
+
+def do_emulationstation(pasta: Path) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
+    """O que o EmulationStation do ArkOS já sabia de cada ROM: nome e imagem.
+
+    Devolve ({rom relativa à pasta, em minúsculas: (nome, imagem)}, {nome do arquivo de
+    imagem, em minúsculas: imagem}), lidos do gamelist.xml (e do .old que o ArkOS deixa)
+    e das pastas de imagens do scraper. Fica em cache até esses arquivos mudarem.
+    """
+    xmls = [pasta / "gamelist.xml", pasta / "gamelist.xml.old"]
+    try:
+        pastas_img = [p for p in pasta.iterdir() if p.is_dir() and p.name.lower() in _PASTAS_DE_IMAGENS]
+    except OSError:
+        return {}, {}
+    assinatura = tuple(p.stat().st_mtime if p.exists() else 0 for p in [*xmls, *pastas_img])
+    if pasta in _cache_es and _cache_es[pasta][0] == assinatura:
+        return _cache_es[pasta][1]
+    imagens: dict[str, str] = {}
+    for sub in pastas_img:
+        for arquivo in sorted(sub.rglob("*")):
+            if arquivo.suffix.lower() in _EXTENSOES_DE_IMAGEM:
+                imagens.setdefault(re.sub(r"-(image|thumb|boxart)$", "", arquivo.stem.lower()), str(arquivo))
+    jogos_es: dict[str, tuple[str, str]] = {}
+    for xml in xmls:
+        try:
+            raiz = ElementTree.parse(xml).getroot()
+        except (OSError, ElementTree.ParseError):
+            continue
+        for jogo in raiz.iter("game"):
+            rom = _caminho_es(pasta, jogo.findtext("path") or "")
+            if not rom or not rom.is_relative_to(pasta):
+                continue
+            chave = rom.relative_to(pasta).as_posix().lower()
+            if chave in jogos_es:
+                continue
+            imagem = _caminho_es(pasta, jogo.findtext("image") or "")
+            jogos_es[chave] = (
+                (jogo.findtext("name") or "").strip(),
+                str(imagem) if imagem and imagem.suffix.lower() in _EXTENSOES_DE_IMAGEM and imagem.is_file() else "",
+            )
+    _cache_es[pasta] = (assinatura, (jogos_es, imagens))
+    return jogos_es, imagens
+
+
 def jogos(dados: tuple[dict[str, Emulador], list[Sistema]] | None = None) -> list[Jogo]:
     emuladores, sistemas = dados or carregar()
+    raiz = roms_dir()
     lista = []
     for sistema in sistemas:
         arquivos = roms(sistema)
@@ -184,19 +275,25 @@ def jogos(dados: tuple[dict[str, Emulador], list[Sistema]] | None = None) -> lis
             continue
         emulador = emuladores[sistema.emulador]
         esta_pronto, falta = pronto(emulador, sistema)
+        pastas = pastas_do_sistema(sistema)
+        es = {pasta: do_emulationstation(pasta) for pasta in pastas}
         for rom in arquivos:
-            relativo = rom.relative_to(roms_dir()).as_posix()
+            relativo = rom.relative_to(raiz).as_posix()
+            pasta = next(p for p in pastas if rom.is_relative_to(p))
+            jogos_es, imagens = es[pasta]
+            nome_es, capa_local = jogos_es.get(rom.relative_to(pasta).as_posix().lower(), ("", ""))
+            capa_local = capa_local or imagens.get(rom.stem.lower(), "")
             lista.append(
                 Jogo(
                     id=f"rom:{relativo}",
-                    nome=nome_bonito(rom),
+                    nome=_TAGS.sub("", nome_es).strip() or nome_bonito(rom),
                     plataforma=sistema.nome,
                     tipo="emulador",
                     colecao=sistema.nome,
                     descricao=f"{rom.name} · {emulador.nome}",
                     controles=sistema.controles,
                     saves=_resolver_saves(emulador.saves, rom),
-                    capa=f"{sistema.libretro}/{rom.stem}" if sistema.libretro else "",
+                    capa=f"{sistema.libretro}/{_COPIA.sub('', rom.stem)}" if sistema.libretro else "",
                     origem="rom",
                     situacao=esta_pronto,
                     acoes=["jogar"] if esta_pronto else ["instalar"],
@@ -206,10 +303,83 @@ def jogos(dados: tuple[dict[str, Emulador], list[Sistema]] | None = None) -> lis
                         "falta": falta,
                         "aviso": emulador.aviso,
                         "combo_sair": emulador.combo_sair,
+                        "nome_es": nome_es,
+                        "capa_local": capa_local,
                     },
                 )
             )
     return lista
+
+
+# Opções de core que o AllGames garante; as outras ficam como você deixar no menu do RetroArch.
+OPCOES_DOS_CORES = {
+    # N64 em Vulkan (ParaLLEl-RDP): o GLideN64 pede OpenGL, que no Docker roda pela CPU.
+    "mupen64plus-rdp-plugin": "parallel",
+    "mupen64plus-rsp-plugin": "parallel",
+}
+
+
+def _opcoes_dos_cores(pasta: Path) -> Path:
+    """Arquivo de opções dos cores, com as do AllGames acrescentadas só se ainda não existirem."""
+    arquivo = pasta / "opcoes-dos-cores.cfg"
+    linhas = arquivo.read_text().splitlines() if arquivo.exists() else []
+    existentes = {linha.partition("=")[0].strip() for linha in linhas if "=" in linha}
+    novas = [f'{chave} = "{valor}"' for chave, valor in OPCOES_DOS_CORES.items() if chave not in existentes]
+    if novas:
+        arquivo.write_text("".join(f"{linha}\n" for linha in linhas + novas))
+    return arquivo
+
+
+# O controle que o Sunshine cria para o Moonlight diz ser de Xbox 360 (045e:028e), mas numera os
+# botões como o de Xbox via Bluetooth: X=3, Y=4, LB=6, RB=7, Select=10, Start=11 (o kernel lista
+# BTN_C e BTN_Z, que ele não tem). O perfil do Xbox 360 comum do RetroArch espera X=2, Y=3...
+# e aí o quadrado do PlayStation, o Start e o Select+Start para sair não funcionam.
+PERFIL_SUNSHINE = """input_driver = "udev"
+input_device = "Sunshine (libvirtualhid) X-Box 360 Controller"
+input_device_display_name = "Controle do Moonlight"
+input_vendor_id = "1118"
+input_product_id = "654"
+input_b_btn = "0"
+input_a_btn = "1"
+input_y_btn = "3"
+input_x_btn = "4"
+input_l_btn = "6"
+input_r_btn = "7"
+input_select_btn = "10"
+input_start_btn = "11"
+input_l3_btn = "13"
+input_r3_btn = "14"
+input_up_btn = "h0up"
+input_down_btn = "h0down"
+input_left_btn = "h0left"
+input_right_btn = "h0right"
+input_l2_axis = "+2"
+input_r2_axis = "+5"
+input_l_x_plus_axis = "+0"
+input_l_x_minus_axis = "-0"
+input_l_y_plus_axis = "+1"
+input_l_y_minus_axis = "-1"
+input_r_x_plus_axis = "+3"
+input_r_x_minus_axis = "-3"
+input_r_y_plus_axis = "+4"
+input_r_y_minus_axis = "-4"
+"""
+_PERFIS_DO_FLATPAK = "app/org.libretro.RetroArch/current/active/files/share/libretro/autoconfig"
+
+
+def _perfis_de_controle(pasta: Path) -> Path:
+    """Perfis de controle do RetroArch: os que vêm com ele e o do controle do Moonlight."""
+    destino = pasta / "autoconfig"
+    udev = destino / "udev"
+    udev.mkdir(parents=True, exist_ok=True)
+    raizes = (Path.home() / ".local/share/flatpak", Path("/var/lib/flatpak"))
+    origem = next((r / _PERFIS_DO_FLATPAK for r in raizes if (r / _PERFIS_DO_FLATPAK / "udev").is_dir()), None)
+    if origem:
+        for perfil in (origem / "udev").glob("*.cfg"):
+            if not (udev / perfil.name).exists():
+                shutil.copyfile(perfil, udev / perfil.name)
+    (udev / "Sunshine X-Box 360 (Moonlight).cfg").write_text(PERFIL_SUNSHINE)
+    return destino
 
 
 def _config_retroarch() -> Path:
@@ -231,7 +401,13 @@ def _config_retroarch() -> Path:
         "input_menu_toggle_gamepad_combo": "2",
         "quit_press_twice": "false",
         "input_autodetect_enable": "true",
+        "joypad_autoconfig_dir": str(_perfis_de_controle(arquivo.parent)),
         "video_fullscreen": "true",
+        # Vulkan usa a placa de vídeo dentro do Flatpak também no Docker: lá o OpenGL do
+        # RetroArch cai na renderização pela CPU (llvmpipe) com placa NVIDIA.
+        "video_driver": "vulkan",
+        "global_core_options": "true",
+        "core_options_path": str(_opcoes_dos_cores(arquivo.parent)),
         "pause_nonactive": "false",
     }
     arquivo.write_text("".join(f'{chave} = "{valor}"\n' for chave, valor in opcoes.items()))

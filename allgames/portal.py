@@ -12,16 +12,18 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import caminhos, capas, downloads, lojas, portmaster, saves
+from . import caminhos, capas, downloads, lojas, portmaster, saves, supervisor
 from .catalogo import Jogo, verificar
 
-PORTA = 47800
+# Cada sessão do AllGames no mesmo PC (Docker com rede do host) usa uma porta: ALLGAMES_PORTA.
+PORTA = int(os.environ.get("ALLGAMES_PORTA") or 47800)
 ARQUIVOS = {"/": "index.html", "/estilo.css": "estilo.css", "/app.js": "app.js"}
 TIPOS_DE_ARQUIVO = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript"}
 NAVEGADORES = ["chromium", "chromium-browser", "google-chrome", "brave-browser", "firefox"]
@@ -50,7 +52,9 @@ def acoes(jogo: Jogo) -> list[str]:
     return [] if any(not v.ok for v in verificar(jogo)) else ["instalar"]
 
 
-def descrever(jogo: Jogo, tarefa: str | None = None, download: dict | None = None) -> dict:
+def descrever(
+    jogo: Jogo, tarefa: str | None = None, download: dict | None = None, pastas: saves.Pastas | None = None
+) -> dict:
     return {
         "id": jogo.id,
         "nome": jogo.nome,
@@ -73,7 +77,7 @@ def descrever(jogo: Jogo, tarefa: str | None = None, download: dict | None = Non
             if download and download["total"]
             else None
         ),
-        "ultimo_save": _data(saves.ultimo_save(jogo)),
+        "ultimo_save": _data(saves.ultimo_save(jogo, pastas)),
         "jogado_em": _data(jogo.jogado_em),
     }
 
@@ -188,7 +192,11 @@ class Handler(BaseHTTPRequestHandler):
         elif caminho == "/api/jogos":
             tarefas = self.server.tarefas
             baixando = {d["id"]: d for d in self.server.downloads.lista()}
-            jogos = [descrever(j, tarefas.situacao(j.id), baixando.get(j.id)) for j in self.server.atualizar().values()]
+            pastas = saves.Pastas()  # cada pasta de ROMs é lida uma vez, não uma vez por ROM
+            jogos = [
+                descrever(j, tarefas.situacao(j.id), baixando.get(j.id), pastas)
+                for j in self.server.atualizar().values()
+            ]
             self._json(
                 {
                     "jogos": jogos,
@@ -205,7 +213,8 @@ class Handler(BaseHTTPRequestHandler):
             jogo = self.server.jogo(self._id())
             capa = capas.obter(jogo) if jogo else None
             if capa:
-                self._responder(HTTPStatus.OK, capa.read_bytes(), "image/png")
+                tipo = "image/jpeg" if capa.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+                self._responder(HTTPStatus.OK, capa.read_bytes(), tipo)
             else:
                 self._responder(HTTPStatus.NOT_FOUND)
         else:
@@ -237,6 +246,12 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.server.downloads.acao(self._id() or "", acao)
             except (RuntimeError, ValueError) as erro:
+                return self._json({"erro": str(erro)}, HTTPStatus.CONFLICT)
+            return self._json({"ok": True})
+        if caminho == "/api/steam":
+            try:
+                lojas.abrir_big_picture()
+            except RuntimeError as erro:
                 return self._json({"erro": str(erro)}, HTTPStatus.CONFLICT)
             return self._json({"ok": True})
         if caminho == "/api/encerrar":
@@ -352,6 +367,30 @@ def _preparar_firefox(perfil: Path) -> None:
     (perfil / "user.js").write_text("\n".join(linhas) + "\n")
 
 
+def voltar_ao_portal(partida: Partida, controles=None, segurar: float = 1.0, parar=None) -> None:
+    """Select+Start segurado fora dos jogos do AllGames (na Steam): fecha o Big Picture e o portal reaparece.
+
+    Dentro dos jogos do AllGames quem sai com essa combinação é o emulador (ou o supervisor).
+    Se a combinação começou com um jogo aberto, ela foi para o jogo: só vale de novo depois de soltar.
+    """
+    controles = controles or supervisor.Controles()
+    desde = None
+    do_jogo = False
+    while not (parar and parar.is_set()):
+        controles.ler(0.2)
+        if not controles.combo_apertado():
+            desde, do_jogo = None, False
+            continue
+        if do_jogo or partida.jogo:
+            do_jogo = True
+            continue
+        desde = desde or time.monotonic()
+        if time.monotonic() - desde >= segurar:
+            lojas.fechar_big_picture()
+            do_jogo = True  # espera soltar
+    controles.fechar()
+
+
 def servir(carregar_jogos, porta: int, publico: bool, kiosk: bool, gamescope: bool) -> int:
     navegador: subprocess.Popen | None = None
 
@@ -379,6 +418,7 @@ def servir(carregar_jogos, porta: int, publico: bool, kiosk: bool, gamescope: bo
         print("Nenhum navegador encontrado (instale o Firefox ou o Chromium).", file=sys.stderr)
         return 1
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    threading.Thread(target=voltar_ao_portal, args=(servidor.partida,), daemon=True).start()
     navegador = subprocess.Popen(comando)
     navegador.wait()
     servidor.partida.encerrar()

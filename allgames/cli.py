@@ -1,11 +1,13 @@
 """Linha de comando do AllGames."""
 
 import argparse
+import concurrent.futures
 import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 from . import (
     biblioteca,
@@ -180,6 +182,10 @@ def cmd_emuladores(jogos, args) -> int:
 
 
 def cmd_lojas(jogos, args) -> int:
+    if args.registrar_steam:
+        if lojas.registrar_biblioteca_steam(Path(args.registrar_steam)):
+            print(f"✔ {args.registrar_steam} agora é uma biblioteca da Steam")
+        return 0
     steam, heroic = lojas.steam_jogos(), lojas.heroic_jogos()
     for nome, lista, dica in [
         ("Steam", steam, "sem chave da Web API aparecem só os instalados (veja docs/LOJAS.md)"),
@@ -212,9 +218,25 @@ def cmd_preparar(jogos, args) -> int:
                 print(f"{nome} pronto")
             except (RuntimeError, OSError, subprocess.CalledProcessError) as erro:
                 avisos.append(f"{nome}: falhou ({erro})")
+    if not args.sem_capas:
+        cmd_capas(jogos, args)
     for aviso in avisos:
         print(f"! {aviso}")
     print("== pronto")
+    return 0
+
+
+def cmd_capas(jogos, args) -> int:
+    """Baixa de uma vez as capas que faltam (o portal também baixa sozinho, conforme você rola a lista)."""
+    todos = [j for j in biblioteca.todos(jogos) if j.capa or j.extra.get("capa_local")]
+    print(f"Conferindo as capas de {len(todos)} jogos (as que faltam vêm do acervo libretro-thumbnails)")
+    com_capa = 0
+    with concurrent.futures.ThreadPoolExecutor(8) as tarefas:
+        for i, capa in enumerate(tarefas.map(capas.obter, todos), 1):
+            com_capa += capa is not None
+            if i % 500 == 0 or i == len(todos):
+                print(f"  {i}/{len(todos)} conferidos, {com_capa} com capa", flush=True)
+    print(f"✔ {com_capa} de {len(todos)} jogos com capa")
     return 0
 
 
@@ -354,13 +376,20 @@ def montar_parser() -> argparse.ArgumentParser:
     p.add_argument("--todos", action="store_true", help="instala os emuladores de todos os consoles")
     p.set_defaults(func=cmd_emuladores)
 
+    p = sub.add_parser("capas", help="baixa as capas que faltam (ROMs, catálogo e lojas)")
+    p.set_defaults(func=cmd_capas)
+
     p = sub.add_parser("lojas", help="jogos da Steam e do Heroic (Epic, GOG, Amazon)")
     p.add_argument("--detalhes", action="store_true", help="lista os jogos")
+    p.add_argument(
+        "--registrar-steam", metavar="PASTA", help="acrescenta uma pasta de jogos já baixados à Steam (fechada)"
+    )
     p.set_defaults(func=cmd_lojas)
 
     p = sub.add_parser("preparar", help="instala emuladores e deixa tudo pronto (usado pelo Docker ao ligar)")
     p.add_argument("--lojas", action="store_true", help="instala também o Heroic (Epic, GOG, Amazon)")
     p.add_argument("--sem-emuladores", action="store_true")
+    p.add_argument("--sem-capas", action="store_true", help="não baixa as capas que faltam")
     p.set_defaults(func=cmd_preparar)
 
     p = sub.add_parser(

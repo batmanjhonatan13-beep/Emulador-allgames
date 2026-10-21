@@ -57,7 +57,7 @@ def _sunshine_rodando() -> tuple[bool, str, str]:
     if nome:
         return True, f"serviço {nome} ativo — painel em https://localhost:47990", ""
     if caminhos.no_docker():
-        return False, "Sunshine parado", "termine a configuração em http://IP-DO-PC:8483 (ele só liga depois disso)"
+        return False, "Sunshine parado", "termine a configuração em https://IP-DO-PC:8483 (ele só liga depois disso)"
     return False, "serviço do Sunshine parado", "systemctl --user enable --now app-dev.lizardbyte.app.Sunshine"
 
 

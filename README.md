@@ -54,9 +54,12 @@ cd ~/Emulador-allgames
 
 Depois:
 
-1. Abra **http://IP-DO-PC:8483** (o script mostra o endereço) e crie a senha.
+1. Abra **https://IP-DO-PC:8483** (o script mostra o endereço), aceite o aviso de certificado,
+   entre com o usuário `steamheadless` e a senha temporária
+   (`docker logs allgames 2>&1 | grep 'Temporary password'`) e crie a sua senha.
 2. Pela mesma página, entre na **Steam** e no **Heroic** (Epic, GOG, Amazon) uma vez.
-3. No celular, instale o **Moonlight**: o PC aparece sozinho na mesma rede Wi-Fi. Pareie com o PIN.
+3. No celular, instale o **Moonlight**: o PC aparece sozinho na mesma rede Wi-Fi (se não aparecer,
+   toque em **+** e digite o IP do PC). Pareie com o PIN.
 4. Copie as ROMs para `~/AllGames/roms/<console>` (dá para copiar a pasta `roms` inteira do
    cartão do R36S). Os emuladores já se instalam sozinhos na primeira vez que o container liga.
 5. No Moonlight, toque em **AllGames** e escolha o jogo.

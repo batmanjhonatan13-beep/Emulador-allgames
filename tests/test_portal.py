@@ -7,6 +7,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from unittest import mock
 
 from allgames import portal
 from allgames.catalogo import Jogo
@@ -96,6 +97,58 @@ class Portal(unittest.TestCase):
         self.assertEqual(jogos["b"]["acoes"], ["instalar"])  # sem originais exigidos
         self.assertEqual(jogos["a"]["origem"], "catalogo")
         self.assertEqual(self._pedir("/api/desinstalar?id=a", "POST")[0], 409)
+
+
+class ControlesDeMentira:
+    """Sequência de leituras: cada item diz se Select+Start está apertado naquele instante."""
+
+    def __init__(self, sequencia, relogio):
+        self.sequencia = list(sequencia)
+        self.relogio = relogio
+        self.atual = False
+
+    def ler(self, espera):
+        self.relogio[0] += espera
+        self.atual = self.sequencia.pop(0) if self.sequencia else False
+
+    def combo_apertado(self):
+        return self.atual
+
+    def fechar(self):
+        pass
+
+
+class VoltarAoPortal(unittest.TestCase):
+    def rodar(self, sequencia, jogando_ate=0):
+        relogio = [0.0]
+        controles = ControlesDeMentira(sequencia, relogio)
+        parar = threading.Event()
+        partida = mock.Mock()
+        type(partida).jogo = mock.PropertyMock(side_effect=lambda: "rom:x" if relogio[0] <= jogando_ate else None)
+        leituras = len(sequencia)
+
+        def ler(espera):
+            ControlesDeMentira.ler(controles, espera)
+            if not controles.sequencia and leituras:
+                parar.set()
+
+        controles.ler = ler
+        with (
+            mock.patch.object(portal.lojas, "fechar_big_picture") as fechar,
+            mock.patch.object(portal.time, "monotonic", side_effect=lambda: relogio[0]),
+        ):
+            portal.voltar_ao_portal(partida, controles, segurar=1.0, parar=parar)
+        return fechar.call_count
+
+    def test_segurar_select_start_na_steam_volta_para_o_portal(self):
+        self.assertEqual(self.rodar([True] * 8 + [False]), 1)
+
+    def test_apertar_rapido_nao_faz_nada(self):
+        self.assertEqual(self.rodar([True, True, False, True, False]), 0)
+
+    def test_sair_do_emulador_com_o_combo_nao_fecha_a_steam(self):
+        # O combo começou com o jogo aberto (o emulador fecha) e continua apertado depois.
+        self.assertEqual(self.rodar([True] * 12 + [False], jogando_ate=0.6), 0)
 
 
 if __name__ == "__main__":

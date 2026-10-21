@@ -47,12 +47,17 @@ O script instala o Docker (e o NVIDIA Container Toolkit, se tiver placa NVIDIA),
 
 Depois:
 
-1. Abra **http://IP-DO-PC:8483** (o script mostra o endereço) e crie a senha. Até isso ser feito,
-   o Sunshine fica desligado.
+1. Abra **https://IP-DO-PC:8483** (o script mostra o endereço). O navegador avisa que o
+   certificado não é confiável: é normal, a página é do seu PC; avance mesmo assim. Entre com o
+   usuário `steamheadless` e a senha temporária que aparece no log do container
+   (`docker logs allgames 2>&1 | grep 'Temporary password'`) e crie a sua senha. Até isso ser
+   feito, o Sunshine não aceita o Moonlight.
 2. Pela mesma página você vê a área de trabalho do container: entre **na Steam** e **no Heroic**
    (Epic, GOG, Amazon) uma vez.
-3. No celular, abra o **Moonlight**: o PC aparece sozinho na mesma rede Wi-Fi. Toque nele e
-   digite o PIN no painel do Sunshine (aberto pela página da porta 8483).
+3. No celular, abra o **Moonlight**: o PC aparece sozinho na mesma rede Wi-Fi. Se não aparecer
+   (no Pop!\_OS o Avahi do PC ocupa a porta de descoberta e o container desliga a dele), toque em
+   **+** e digite o IP do PC. Toque nele e digite o PIN no painel do Sunshine (aberto pela página
+   da porta 8483).
 4. Copie as ROMs para `~/AllGames/roms/<console>` e toque em **AllGames** no Moonlight.
 
 Para acompanhar a instalação dos emuladores na primeira vez:
@@ -74,6 +79,13 @@ Ficam em `docker/.env`:
 **Adicionar ROMs:** é só copiar para a pasta do console. Com o container ligado, elas aparecem no
 portal na próxima vez que ele atualizar a lista, sem reiniciar nada. Dá para copiar pela rede
 (compartilhamento do Pop!\_OS) ou direto no PC.
+
+**Jogos que você já tinha na Steam do Pop!\_OS:** se a Steam também está instalada direto no
+PC, o script preenche `STEAM_PC` no `docker/.env` com a pasta `~/.local/share/Steam/steamapps`.
+O container usa os mesmos arquivos como mais uma biblioteca da Steam (`/mnt/games/SteamPC`):
+os jogos aparecem instalados no AllGames sem baixar de novo. **Não abra as duas Steams ao mesmo
+tempo**, porque as duas mexeriam nos mesmos arquivos. Para outra biblioteca (outro disco), aponte
+`STEAM_PC` para a pasta `steamapps` dela e rode `docker compose up -d`.
 
 Pastas especiais dentro de `ROMS`:
 

@@ -1,0 +1,5 @@
+# Mouse, teclado, tela de toque e controles virtuais que o Sunshine do container AllGames
+# cria ("libvirtualhid"): são do container. Sem esta regra, a área de trabalho do PC também
+# usa esses aparelhos, e tocar na tela do celular mexe o mouse do PC.
+# Instalada em /etc/udev/rules.d/ pelo scripts/instalar-docker.sh.
+SUBSYSTEM=="input", ATTRS{name}=="*libvirtualhid*", ENV{LIBINPUT_IGNORE_DEVICE}="1", ENV{ID_INPUT_JOYSTICK}="", TAG-="uaccess", GROUP="root", MODE="0600"

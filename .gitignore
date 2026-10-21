@@ -21,3 +21,6 @@ __pycache__/
 *.xex
 *.o2r
 *.otr
+
+# Configuração local do Docker (suas pastas), criada pelo scripts/instalar-docker.sh.
+docker/.env

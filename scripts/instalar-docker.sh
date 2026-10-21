@@ -16,6 +16,15 @@ if ! command -v docker >/dev/null; then
   msg "Instalando o Docker"
   sudo apt-get update
   sudo apt-get install -y docker.io docker-compose-v2
+elif ! docker compose version >/dev/null 2>&1; then
+  # Docker já instalado sem o plugin do compose (comum com o pacote docker.io).
+  msg "Instalando o Docker Compose"
+  sudo apt-get update
+  if dpkg -s docker-ce >/dev/null 2>&1; then
+    sudo apt-get install -y docker-compose-plugin # Docker do repositório oficial
+  else
+    sudo apt-get install -y docker-compose-v2
+  fi
 fi
 if ! id -nG "$USER" | grep -qw docker; then
   sudo usermod -aG docker "$USER"
@@ -51,19 +60,33 @@ for servico in app-dev.lizardbyte.app.Sunshine sunshine; do
   fi
 done
 
+# --- Entrada virtual ----------------------------------------------------------------
+# O mouse, o teclado e os controles virtuais do Sunshine do container ficam só no container
+# (sem isto, tocar na tela do celular mexe o mouse do PC).
+regra=/etc/udev/rules.d/60-allgames-entrada-virtual.rules
+if ! cmp -s "$REPO/docker/60-allgames-entrada-virtual.rules" "$regra"; then
+  msg "Separando o mouse e os controles do celular dos do PC"
+  sudo install -m 0644 "$REPO/docker/60-allgames-entrada-virtual.rules" "$regra"
+  sudo udevadm control --reload
+  sudo udevadm trigger --subsystem-match=input --action=change
+fi
+
 # --- Configuração -----------------------------------------------------------------
 cd "$REPO/docker"
 if [[ ! -f .env ]]; then
   render=$(find /dev/dri -name 'renderD*' 2>/dev/null | sort | tail -n1)
+  steam_pc=""
+  [[ -d "$HOME/.local/share/Steam/steamapps" ]] && steam_pc="$HOME/.local/share/Steam/steamapps"
   sed -e "s|/home/SEU_USUARIO|$HOME|g" -e "s|^PUID=.*|PUID=$(id -u)|" -e "s|^PGID=.*|PGID=$(id -g)|" \
-    -e "s|^GPU=.*|GPU=${render:-/dev/dri/renderD128}|" .env.exemplo >.env
+    -e "s|^GPU=.*|GPU=${render:-/dev/dri/renderD128}|" -e "s|^STEAM_PC=.*|STEAM_PC=$steam_pc|" .env.exemplo >.env
   msg "Configuração criada em docker/.env (confira as pastas)"
 fi
 set -a
 # shellcheck disable=SC1091
 . ./.env
 set +a
-mkdir -p "$DADOS"/{home,estado,journal} "$JOGOS" "$ROMS"
+# As pastas são criadas aqui, com o seu usuário (o Docker criaria como root).
+mkdir -p "$DADOS"/{home,estado,journal,sem-steam-do-pc} "$JOGOS/SteamPC/steamapps" "$ROMS"
 
 msg "Construindo e ligando o container (a primeira vez demora)"
 "${DOCKER[@]}" compose "${compose[@]}" up -d --build
@@ -73,11 +96,14 @@ cat <<FIM
 
 Pronto! O AllGames está ligado no container "allgames".
 
- 1. Abra http://${ip:-IP-DO-PC}:8483 (no PC ou no celular) e crie a senha da
-    primeira configuração. Isso libera o Sunshine.
+ 1. Abra https://${ip:-IP-DO-PC}:8483 (no PC ou no celular), aceite o aviso de
+    certificado e entre com o usuário steamheadless e a senha temporária:
+      ${DOCKER[*]} logs allgames 2>&1 | grep 'Temporary password'
+    Crie a sua senha. Isso libera o Sunshine.
  2. Entre na Steam e no Heroic pela área de trabalho do container (a mesma
     página da porta 8483 mostra a tela) uma vez.
- 3. No celular, no Moonlight, adicione o PC e pareie; abra "AllGames".
+ 3. No celular, no Moonlight, adicione o PC (se não aparecer sozinho, toque
+    em + e digite ${ip:-o IP do PC}) e pareie; abra "AllGames".
  4. ROMs: copie para $ROMS/<console> (snes, psx, ps2, switch...).
 
 Na primeira vez o container baixa os emuladores (alguns GB). Acompanhe com:

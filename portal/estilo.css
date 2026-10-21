@@ -131,6 +131,26 @@ svg {
   color: var(--destaque);
 }
 
+.botao-steam {
+  background: transparent;
+  color: var(--texto);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botao-steam svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.botao-steam:hover,
+.botao-steam.foco {
+  border-color: var(--destaque);
+}
+
 .relogio {
   font-variant-numeric: tabular-nums;
   font-weight: 600;

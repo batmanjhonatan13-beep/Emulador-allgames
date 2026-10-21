@@ -14,10 +14,16 @@
     </div>
     <nav class="abas">
       <button class="aba ativa" data-nav data-aba="inicio">Início</button>
+      <button class="aba" data-nav data-aba="recentes">Recentes</button>
+      <button class="aba" data-nav data-aba="instalados">Instalados</button>
       <button class="aba" data-nav data-aba="biblioteca">Biblioteca</button>
       <button class="aba" data-nav data-aba="downloads">Downloads <span id="contagem-downloads" class="emblema" hidden></span></button>
     </nav>
     <div class="status">
+      <button id="abrir-steam" class="pilula botao-steam" data-nav aria-label="Abrir a Steam">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="15.5" cy="9" r="2.5"/><path d="M3.5 14.5l5.5 2.3a2.6 2.6 0 0 0 5-1.3l1.2-4"/></svg>
+        Steam
+      </button>
       <span id="entrada" class="pilula"></span>
       <span id="relogio" class="relogio"></span>
       <button id="sair" class="botao-icone" data-nav hidden aria-label="Sair do AllGames">
@@ -30,6 +36,14 @@
     <section id="inicio" class="visao">
       <div id="destaque" class="destaque"></div>
       <div id="fileiras"></div>
+    </section>
+    <section id="recentes" class="visao" hidden>
+      <div id="grade-recentes" class="grade"></div>
+    </section>
+    <section id="instalados" class="visao" hidden>
+      <div id="instalando"></div>
+      <h2 class="titulo-secao">Prontos para jogar</h2>
+      <div id="grade-instalados" class="grade"></div>
     </section>
     <section id="biblioteca" class="visao" hidden>
       <div class="barra-busca">

@@ -20,6 +20,12 @@ class Vdf(unittest.TestCase):
         self.assertEqual(dados["libraryfolders"]["0"]["path"], "/home/a/Steam")
         self.assertEqual(dados["libraryfolders"]["0"]["apps"], {"10": "1"})
 
+    def test_escreve_e_le_de_volta(self):
+        dados = {"a": {"b": 'tem "aspas" e \\barra', "c": {}, "d": {"1": "2"}}}
+        self.assertEqual(
+            lojas._vdf(lojas._vdf_texto(dados)), {"a": {"b": 'tem "aspas" e \\barra', "c": {}, "d": {"1": "2"}}}
+        )
+
 
 class Lojas(unittest.TestCase):
     def setUp(self):
@@ -33,6 +39,27 @@ class Lojas(unittest.TestCase):
         self.patch.stop()
         self.tmp.cleanup()
 
+    def test_registra_os_jogos_da_steam_do_pc_sem_duplicar(self):
+        principal = self.home / ".local/share/Steam/steamapps"
+        principal.mkdir(parents=True)
+        vdf = (
+            f'"libraryfolders"\n{{\n\t"0"\n\t{{\n\t\t"path"\t\t"{principal.parent}"\n\t\t"apps"\n\t\t{{\n\t\t}}\n\t}}\n'
+            '\t"1"\n\t{\n\t\t"path"\t\t"/mnt/games/GameLibrary/Steam"\n\t}\n}\n'
+        )
+        (principal / "libraryfolders.vdf").write_text(vdf)
+        do_pc = self.home / "Jogos/SteamPC"
+        (do_pc / "steamapps").mkdir(parents=True)
+        (do_pc / "steamapps/appmanifest_1174180.acf").write_text(MANIFESTO % ("1174180", "Red Dead Redemption 2", "4"))
+        self.assertTrue(lojas.registrar_biblioteca_steam(do_pc))
+        self.assertFalse(lojas.registrar_biblioteca_steam(do_pc), "já registrada: não muda nada")
+        pastas = lojas._vdf((principal / "libraryfolders.vdf").read_text())["libraryfolders"]
+        self.assertEqual(list(pastas), ["0", "1", "2"])
+        self.assertEqual(pastas["2"]["path"], str(do_pc))
+        self.assertEqual(pastas["2"]["apps"], {"1174180": "0"})
+        self.assertEqual(pastas["1"]["path"], "/mnt/games/GameLibrary/Steam")
+        self.assertTrue((do_pc / "libraryfolder.vdf").exists())
+        self.assertEqual(lojas.steam_instalados(), {"1174180": "Red Dead Redemption 2"})
+
     def _steam(self, biblioteca_extra=True):
         raiz = self.home / ".local/share/Steam"
         (raiz / "steamapps").mkdir(parents=True)
@@ -45,6 +72,14 @@ class Lojas(unittest.TestCase):
         (raiz / "steamapps/appmanifest_1493710.acf").write_text(MANIFESTO % ("1493710", "Proton Experimental", "4"))
         (raiz / "steamapps/appmanifest_10.acf").write_text(MANIFESTO % ("10", "Baixando", "1026"))
         (extra / "steamapps/appmanifest_1245620.acf").write_text(MANIFESTO % ("1245620", "ELDEN RING", "4"))
+
+    def test_steam_fica_fora_do_portal_a_nao_ser_que_voce_peca(self):
+        self._steam()
+        self.assertEqual([j for j in lojas.jogos() if j.origem == "steam"], [])
+        config = self.home / "AllGames/config.toml"
+        config.parent.mkdir(parents=True)
+        config.write_text("[steam]\nmostrar_no_portal = true\n")
+        self.assertIn("steam:254700", {j.id for j in lojas.jogos()})
 
     def test_steam_instalados_em_todas_as_bibliotecas(self):
         self._steam()

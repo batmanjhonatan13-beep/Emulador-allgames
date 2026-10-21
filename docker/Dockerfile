@@ -31,4 +31,5 @@ RUN ln -sf /opt/allgames/bin/allgames /usr/local/bin/allgames \
     && install -m 0644 /opt/allgames/docker/allgames-apps.service /opt/allgames/docker/allgames-preparar.service \
         /usr/lib/systemd/system/ \
     && install -m 0755 /opt/allgames/docker/20-allgames.sh /usr/local/sh-init.d/20-allgames.sh \
+    && install -m 0755 /opt/allgames/docker/80-allgames-steam-do-pc.sh /usr/local/sh-init.d/80-allgames-steam-do-pc.sh \
     && systemctl enable allgames-apps.service allgames-preparar.service

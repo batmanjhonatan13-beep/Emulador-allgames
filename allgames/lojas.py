@@ -13,6 +13,7 @@ capa, para jogar, instalar e desinstalar pelo celular:
 
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -98,9 +99,62 @@ def _vdf(texto: str) -> dict:
         elif chave is None:
             chave = valor
         else:
-            pilha[-1][chave] = valor.replace("\\\\", "\\")
+            pilha[-1][chave] = re.sub(r'\\(["\\])', r"\1", valor)
             chave = None
     return raiz
+
+
+def _vdf_texto(dados: dict, nivel: int = 0) -> str:
+    """Escreve o formato VDF (texto) da Steam, o inverso de _vdf."""
+    recuo = "\t" * nivel
+    linhas = []
+    for chave, valor in dados.items():
+        if isinstance(valor, dict):
+            linhas += [f'{recuo}"{chave}"', f"{recuo}{{", _vdf_texto(valor, nivel + 1).rstrip("\n"), f"{recuo}}}"]
+        else:
+            texto = str(valor).replace("\\", "\\\\").replace('"', '\\"')
+            linhas.append(f'{recuo}"{chave}"\t\t"{texto}"')
+    return "".join(f"{linha}\n" for linha in linhas if linha)
+
+
+def registrar_biblioteca_steam(raiz: Path, rotulo: str = "Steam do PC") -> bool:
+    """Acrescenta uma pasta de jogos já instalados à Steam (que precisa estar fechada).
+
+    É como a Steam faz ao "adicionar pasta de biblioteca": no Docker, os jogos que você
+    já tinha baixado na Steam do Pop!_OS aparecem sem baixar de novo. Devolve se mudou algo.
+    """
+    principal = Path.home() / ".local/share/Steam/steamapps/libraryfolders.vdf"
+    try:
+        dados = _vdf(principal.read_text(errors="replace"))
+    except OSError:
+        return False  # a Steam ainda não abriu nenhuma vez
+    pastas = dados.setdefault("libraryfolders", {})
+    if any(isinstance(p, dict) and p.get("path") == str(raiz) for p in pastas.values()):
+        return False
+    marcador = raiz / "libraryfolder.vdf"
+    try:
+        contentid = _vdf(marcador.read_text(errors="replace"))["libraryfolder"]["contentid"]
+    except (OSError, KeyError, TypeError):
+        contentid = str(random.getrandbits(62))
+        marcador.write_text(_vdf_texto({"libraryfolder": {"contentid": contentid, "label": rotulo}}))
+    apps = {}
+    for manifesto in sorted((raiz / "steamapps").glob("appmanifest_*.acf")):
+        app = _vdf(manifesto.read_text(errors="replace")).get("AppState", {})
+        if app.get("appid"):
+            apps[app["appid"]] = app.get("SizeOnDisk", "0")
+    pastas[str(max((int(k) for k in pastas if k.isdigit()), default=-1) + 1)] = {
+        "path": str(raiz),
+        "label": rotulo,
+        "contentid": contentid,
+        "totalsize": "0",
+        "update_clean_bytes_tally": "0",
+        "time_last_update_verified": "0",
+        "apps": apps,
+    }
+    temporario = principal.with_name(f"{principal.name}.allgames")
+    temporario.write_text(_vdf_texto(dados))
+    temporario.replace(principal)
+    return True
 
 
 def steam_raiz() -> Path | None:
@@ -294,8 +348,15 @@ def heroic_jogos() -> list[Jogo]:
     return sorted(lista, key=lambda j: j.nome.lower())
 
 
+def steam_no_portal() -> bool:
+    """Jogos da Steam no portal? Por padrão não: a Steam abre pelo botão Guide do controle
+    (ou pelo botão "Steam" do portal) e já tem a sua própria tela para escolher e jogar.
+    Para mostrar, em ~/AllGames/config.toml: [steam] mostrar_no_portal = true."""
+    return bool(configuracao().get("steam", {}).get("mostrar_no_portal", False))
+
+
 def jogos() -> list[Jogo]:
-    return steam_jogos() + heroic_jogos()
+    return (steam_jogos() if steam_no_portal() else []) + heroic_jogos()
 
 
 # ------------------------------------------------------------------ ações
@@ -329,6 +390,21 @@ def acao(jogo: Jogo, nome: str) -> str:
         _abrir(heroic)
         return f"O Heroic abriu: escolha {jogo.nome} e use Desinstalar."
     raise ValueError(f"{jogo.nome} não é de uma loja")
+
+
+def abrir_big_picture() -> None:
+    """Abre a Steam em tela cheia (Big Picture), a mesma tela do botão Guide do controle."""
+    steam = steam_comando()
+    if not steam:
+        raise RuntimeError("a Steam não está instalada no PC")
+    _abrir([*steam, "steam://open/bigpicture"])
+
+
+def fechar_big_picture() -> None:
+    """Fecha o Big Picture e volta para o que estava embaixo (o portal). Os jogos continuam abertos."""
+    steam = steam_comando()
+    if steam:
+        _abrir([*steam, "steam://close/bigpicture"])
 
 
 def abrir_downloads_steam() -> None:

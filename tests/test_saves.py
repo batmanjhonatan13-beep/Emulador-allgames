@@ -65,6 +65,43 @@ class Saves(unittest.TestCase):
         self.assertEqual(len(copias), 3)
         self.assertEqual((copias[-1] / "jogo" / "x.sav").read_text(), "v4")
 
+    def test_saves_de_roms_com_pasta_lida_uma_vez(self):
+        """Mesmo resultado do glob, inclusive com colchetes no nome, lendo a pasta uma vez só."""
+        import glob
+
+        pasta = self.home / "roms/gb"
+        pasta.mkdir(parents=True)
+        nomes = [
+            "Pokemon (USA) [!].gb",
+            "Pokemon (USA) [!].srm",
+            "Pokemon (USA) [!].state",
+            "Pokemon (USA) [!].state1",
+            "Pokemon (USA) [!] Hack.srm",
+            "Pokemon (USA).srm",
+            "Tetris.srm",
+            ".Tetris.state",
+        ]
+        for nome in nomes:
+            (pasta / nome).write_text("x")
+        (pasta / "Pokemon (USA) [!].state.d").mkdir()
+        padroes = ["{pasta_rom}/{nome}.srm", "{pasta_rom}/{nome}.state*", "{pasta_rom}/{nome}.sav"]
+        pastas = saves.Pastas()
+        with mock.patch("os.listdir", wraps=os.listdir) as listar:
+            for rom in ("Pokemon (USA) [!].gb", "Tetris.gb", "Pokemon (USA).gb"):
+                jogo = Jogo(f"rom:gb/{rom}", rom, "GB", "emulador")
+                jogo.saves = [
+                    p.replace("{pasta_rom}", glob.escape(str(pasta))).replace("{nome}", glob.escape(Path(rom).stem))
+                    for p in padroes
+                ]
+                esperado = sorted({Path(p) for padrao in jogo.saves for p in glob.glob(padrao) if Path(p).is_file()})
+                self.assertEqual(saves.arquivos(jogo, pastas), esperado, rom)
+        self.assertEqual(listar.call_count, 1)
+        jogo = Jogo("rom:gb/Pokemon (USA) [!].gb", "P", "GB", "emulador")
+        jogo.saves = [f"{glob.escape(str(pasta))}/{glob.escape('Pokemon (USA) [!]')}.state*"]
+        self.assertEqual(
+            [p.name for p in saves.arquivos(jogo)], ["Pokemon (USA) [!].state", "Pokemon (USA) [!].state1"]
+        )
+
     def test_pasta_dos_backups(self):
         (self.jogo.pasta / "x.sav").write_text("a")
         copia = saves.fazer_backup(self.jogo)
