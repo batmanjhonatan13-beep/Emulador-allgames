@@ -6,10 +6,11 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
-from . import caminhos
+from . import caminhos, windows
 from .catalogo import Jogo
 
 SERVICOS = ("app-dev.lizardbyte.app.Sunshine", "sunshine")
@@ -18,7 +19,7 @@ SERVICOS = ("app-dev.lizardbyte.app.Sunshine", "sunshine")
 SERVICO_DOCKER = "steam-headless-sunshine.service"
 
 # Reconhece apps criados pelo AllGames mesmo que o repositório mude de lugar.
-_NOSSO_CMD = re.compile(r"""(^|/)allgames["']?\s+(jogar|portal)\b""")
+_NOSSO_CMD = re.compile(r"""(^|[/\\])allgames["']?\s+(jogar|portal)\b""")
 NOME_DO_PORTAL = "AllGames"
 
 APPS_PADRAO = {
@@ -44,11 +45,21 @@ def _citar(texto: str) -> str:
     return f'"{texto}"' if " " in texto else texto
 
 
+def _allgames() -> str:
+    """Como o Sunshine chama o AllGames. No Windows um script sem extensão não roda sozinho:
+    vai pelo pythonw (o Python sem janela de terminal)."""
+    if not windows.ATIVO:
+        return _citar(str(caminhos.EXECUTAVEL))
+    python = Path(sys.executable)
+    sem_janela = python.with_name("pythonw.exe")
+    return f'"{sem_janela if sem_janela.exists() else python}" -X utf8 "{caminhos.EXECUTAVEL}"'
+
+
 def app_do_jogo(jogo: Jogo, capa: Path | None, gamescope: bool = False) -> dict:
     opcoes = " --gamescope" if gamescope else ""
     app = {
         "name": jogo.nome,
-        "cmd": f"{_citar(str(caminhos.EXECUTAVEL))} jogar{opcoes} {shlex.quote(jogo.id)}",
+        "cmd": f"{_allgames()} jogar{opcoes} {shlex.quote(jogo.id)}",
         "auto-detach": True,
         "wait-all": True,
         "exit-timeout": 5,
@@ -63,7 +74,7 @@ def app_do_portal(gamescope: bool = False) -> dict:
     opcoes = " --gamescope" if gamescope else ""
     return {
         "name": NOME_DO_PORTAL,
-        "cmd": f"{_citar(str(caminhos.EXECUTAVEL))} portal --kiosk{opcoes}",
+        "cmd": f"{_allgames()} portal --kiosk{opcoes}",
         "image-path": str(caminhos.PORTAL / "capa.png"),
         "auto-detach": True,
         "wait-all": True,
@@ -108,6 +119,8 @@ def gravar(arquivo: Path, conteudo: dict) -> Path | None:
 
 
 def servico_ativo() -> str | None:
+    if windows.ATIVO:
+        return windows.SERVICO_SUNSHINE if windows.sunshine_ativo() else None
     if not shutil.which("systemctl"):
         return None
     for nome in SERVICOS:
@@ -123,5 +136,7 @@ def reiniciar() -> bool:
     nome = servico_ativo()
     if not nome:
         return False
+    if windows.ATIVO:
+        return windows.reiniciar_sunshine()
     escopo = [] if nome == SERVICO_DOCKER else ["--user"]
     return subprocess.run(["systemctl", *escopo, "restart", nome]).returncode == 0

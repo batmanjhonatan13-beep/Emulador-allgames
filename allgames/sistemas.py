@@ -23,11 +23,13 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 
-from . import caminhos
+from . import caminhos, windows
 from .catalogo import Jogo
 
 SISTEMAS = caminhos.REPO / "catalogo" / "sistemas.toml"
 CORES_URL = "https://buildbot.libretro.com/nightly/linux/x86_64/latest/{core}_libretro.so.zip"
+CORES_URL_WINDOWS = "https://buildbot.libretro.com/nightly/windows/x86_64/latest/{core}_libretro.dll.zip"
+WINDOWS = windows.ATIVO
 ARQUIVOS_SISTEMA_URL = "https://buildbot.libretro.com/assets/system/{nome}.zip"
 EDEN_RELEASES = [
     "https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases/latest",
@@ -52,6 +54,9 @@ class Emulador:
     alternativas: dict[str, list[str]] = field(default_factory=dict)
     baixar: str = ""  # "eden": o AllGames baixa o AppImage sozinho
     combo_sair: bool = False  # Select+Start segurado fecha o emulador
+    # No Windows: exe ("retroarch" = o RetroArch do winget) e, para baixar sozinho,
+    # releases (páginas de versões) e arquivos (nomes do zip para Windows).
+    windows: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -97,7 +102,23 @@ def emuladores_dir() -> Path:
 def cores_dir() -> Path:
     if os.environ.get("ALLGAMES_CORES"):
         return Path(os.environ["ALLGAMES_CORES"])
+    if WINDOWS:
+        return emuladores_dir() / "retroarch" / "cores"
     return Path.home() / ".var/app/org.libretro.RetroArch/config/retroarch/cores"
+
+
+def arquivo_core(core: str) -> str:
+    return f"{core}_libretro.dll" if WINDOWS else f"{core}_libretro.so"
+
+
+def programa_windows(emulador: Emulador) -> Path | None:
+    """O executável do emulador no Windows, se já estiver instalado."""
+    exe = emulador.windows.get("exe")
+    if not exe:
+        return None
+    if exe == "retroarch":
+        return windows.retroarch()
+    return windows.exe_baixado(emuladores_dir() / emulador.chave, exe)
 
 
 def pastas_do_sistema(sistema: Sistema) -> list[Path]:
@@ -186,13 +207,18 @@ def appimage(emulador: Emulador) -> Path | None:
 
 def pronto(emulador: Emulador, sistema: Sistema | None = None) -> tuple[bool, str]:
     """(está pronto?, o que falta)."""
-    if emulador.appimage:
+    if WINDOWS:
+        if not emulador.windows:
+            return False, f"o {emulador.nome} ainda não roda no Windows"
+        if not programa_windows(emulador):
+            return False, f"instale o {emulador.nome}"
+    elif emulador.appimage:
         if appimage(emulador):
             return True, ""
         return False, f"coloque o AppImage em {emuladores_dir() / emulador.appimage}"
-    if not flatpak_instalado(emulador.flatpak):
+    elif not flatpak_instalado(emulador.flatpak):
         return False, f"instale o {emulador.nome}"
-    if sistema and sistema.core and not (cores_dir() / f"{sistema.core}_libretro.so").exists():
+    if sistema and sistema.core and not (cores_dir() / arquivo_core(sistema.core)).exists():
         return False, f"instale o core {sistema.core} do RetroArch"
     return True, ""
 
@@ -401,7 +427,6 @@ def _config_retroarch() -> Path:
         "input_menu_toggle_gamepad_combo": "2",
         "quit_press_twice": "false",
         "input_autodetect_enable": "true",
-        "joypad_autoconfig_dir": str(_perfis_de_controle(arquivo.parent)),
         "video_fullscreen": "true",
         # Vulkan usa a placa de vídeo dentro do Flatpak também no Docker: lá o OpenGL do
         # RetroArch cai na renderização pela CPU (llvmpipe) com placa NVIDIA.
@@ -410,6 +435,9 @@ def _config_retroarch() -> Path:
         "core_options_path": str(_opcoes_dos_cores(arquivo.parent)),
         "pause_nonactive": "false",
     }
+    if not WINDOWS:
+        # No Windows o Sunshine cria um controle XInput comum; no Linux ele precisa do perfil próprio.
+        opcoes["joypad_autoconfig_dir"] = str(_perfis_de_controle(arquivo.parent))
     arquivo.write_text("".join(f'{chave} = "{valor}"\n' for chave, valor in opcoes.items()))
     return arquivo
 
@@ -421,7 +449,12 @@ def comando(jogo: Jogo, dados: tuple[dict[str, Emulador], list[Sistema]] | None 
     rom = Path(jogo.extra["rom"])
 
     modelo = emulador.comando
-    if emulador.appimage:
+    if WINDOWS:
+        exe = programa_windows(emulador)
+        if not exe:
+            raise RuntimeError(f"o {emulador.nome} não está instalado: rode allgames emuladores instalar")
+        programa = [str(exe)]
+    elif emulador.appimage:
         arquivo = appimage(emulador)
         if not arquivo:
             raise RuntimeError(f"emulador não encontrado: coloque o AppImage em {emuladores_dir() / emulador.appimage}")
@@ -449,7 +482,7 @@ def comando(jogo: Jogo, dados: tuple[dict[str, Emulador], list[Sistema]] | None 
         "{pasta_rom}": str(rom.parent),
         "{roms}": str(roms_dir()),
         "{bios}": str(bios_dir()),
-        "{core}": str(cores_dir() / f"{sistema.core}_libretro.so"),
+        "{core}": str(cores_dir() / arquivo_core(sistema.core)),
     }
     argv = []
     for parte in modelo:
@@ -473,12 +506,13 @@ def _baixar(url: str, timeout: int = 120) -> bytes:
 
 
 def _baixar_core(core: str) -> None:
-    destino = cores_dir() / f"{core}_libretro.so"
+    destino = cores_dir() / arquivo_core(core)
     if destino.exists():
         return
     print(f"  baixando o core {core}")
-    with zipfile.ZipFile(io.BytesIO(_baixar(CORES_URL.format(core=core)))) as pacote:
-        dados = pacote.read(f"{core}_libretro.so")
+    url = (CORES_URL_WINDOWS if WINDOWS else CORES_URL).format(core=core)
+    with zipfile.ZipFile(io.BytesIO(_baixar(url))) as pacote:
+        dados = pacote.read(arquivo_core(core))
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporario = destino.with_suffix(".tmp")
     temporario.write_bytes(dados)
@@ -527,11 +561,16 @@ def preparar_switch() -> list[str]:
     """Instala no Eden as chaves e o firmware que estão em roms/bios/switch."""
     origem = bios_dir() / "switch"
     feito = []
-    dados_eden = Path.home() / ".local/share/eden"
+    if WINDOWS:
+        dados_eden = windows.appdata() / "eden"
+        pastas_chaves = [dados_eden / "keys"]
+    else:
+        dados_eden = Path.home() / ".local/share/eden"
+        pastas_chaves = [dados_eden / "keys", Path.home() / ".config/eden/keys"]
     for nome in ("prod.keys", "title.keys"):
         chave = origem / nome
         if chave.exists():
-            for pasta in (dados_eden / "keys", Path.home() / ".config/eden/keys"):
+            for pasta in pastas_chaves:
                 pasta.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(chave, pasta / nome)
             feito.append(nome)
@@ -575,7 +614,10 @@ def configurar_xemu() -> Path | None:
         (p for n, p in arquivos.items() if n.endswith(".bin") and p not in (bootrom, eeprom)),
         None,
     )
-    config = Path.home() / ".var/app/app.xemu.xemu/data/xemu/xemu/xemu.toml"
+    if WINDOWS:
+        config = windows.appdata() / "xemu/xemu/xemu.toml"
+    else:
+        config = Path.home() / ".var/app/app.xemu.xemu/data/xemu/xemu/xemu.toml"
     try:
         atual = tomllib.loads(config.read_text())
     except (OSError, ValueError):
@@ -616,6 +658,24 @@ def instalar_flatpak(app: str) -> None:
     subprocess.run(["flatpak", "install", "--user", "-y", "--noninteractive", "flathub", app], check=True)
 
 
+def _instalar_no_windows(sistema: Sistema, emulador: Emulador, avisos: list[str]) -> bool:
+    """Prepara o emulador no Windows. Devolve se é o RetroArch (aí ainda faltam os cores)."""
+    if emulador.windows.get("exe") == "retroarch":
+        if windows.retroarch():
+            return True
+        avisos.append(f"{sistema.nome}: instale o RetroArch (o scripts/instalar-windows.ps1 faz isso)")
+        return False
+    if emulador.windows.get("releases"):
+        if not programa_windows(emulador):
+            pasta = emuladores_dir() / emulador.chave
+            windows.baixar_zip(emulador.windows["releases"], emulador.windows.get("arquivos", []), pasta)
+        if sistema.id == "switch" and not (bios_dir() / "switch/prod.keys").exists():
+            avisos.append(f"{sistema.nome}: {emulador.aviso}")
+        return False
+    avisos.append(f"{sistema.nome}: o {emulador.nome} ainda não roda no Windows")
+    return False
+
+
 def instalar(alvos: list[str], dados=None, todos: bool = False) -> list[str]:
     """Instala emuladores (e cores) pelos ids de sistema ou chaves de emulador.
 
@@ -637,7 +697,10 @@ def instalar(alvos: list[str], dados=None, todos: bool = False) -> list[str]:
         emulador = emuladores[sistema.emulador]
         print(f"{sistema.nome}: {emulador.nome}")
         try:
-            if emulador.appimage:
+            if WINDOWS:
+                if not _instalar_no_windows(sistema, emulador, avisos):
+                    continue
+            elif emulador.appimage:
                 pasta = emuladores_dir() / emulador.appimage
                 pasta.mkdir(parents=True, exist_ok=True)
                 atual = appimage(emulador)
@@ -649,7 +712,8 @@ def instalar(alvos: list[str], dados=None, todos: bool = False) -> list[str]:
                 if sistema.id == "switch" and not (bios_dir() / "switch/prod.keys").exists():
                     avisos.append(f"{sistema.nome}: {emulador.aviso}")
                 continue
-            instalar_flatpak(emulador.flatpak)
+            else:
+                instalar_flatpak(emulador.flatpak)
             if sistema.core:
                 _baixar_core(sistema.core)
             for nome in sistema.arquivos_sistema:

@@ -27,7 +27,7 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 
-from . import caminhos
+from . import caminhos, windows
 from .catalogo import Jogo
 from .sistemas import flatpak_instalado
 
@@ -158,6 +158,9 @@ def registrar_biblioteca_steam(raiz: Path, rotulo: str = "Steam do PC") -> bool:
 
 
 def steam_raiz() -> Path | None:
+    if windows.ATIVO:
+        exe = windows.steam()
+        return exe.parent if exe and (exe.parent / "steamapps").is_dir() else None
     for raiz in (
         Path.home() / ".local/share/Steam",
         Path.home() / ".steam/steam",
@@ -169,6 +172,9 @@ def steam_raiz() -> Path | None:
 
 
 def steam_comando() -> list[str] | None:
+    if windows.ATIVO:
+        exe = windows.steam()
+        return [str(exe)] if exe else None
     if shutil.which("steam"):
         return ["steam"]
     if flatpak_instalado("com.valvesoftware.Steam"):

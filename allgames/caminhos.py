@@ -9,6 +9,7 @@ Tudo fica em ~/AllGames (ou em $ALLGAMES_HOME):
 """
 
 import os
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -49,5 +50,7 @@ def backups() -> Path:
 
 
 def config_sunshine() -> Path:
+    if sys.platform == "win32":
+        return Path(os.environ.get("ProgramFiles") or "C:/Program Files") / "Sunshine/config"
     xdg = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
     return Path(xdg) / "sunshine"

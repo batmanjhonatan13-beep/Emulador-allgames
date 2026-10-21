@@ -5,6 +5,9 @@ from .catalogo import Jogo
 
 
 def todos(jogos_do_catalogo: list[Jogo] | None = None) -> list[Jogo]:
+    if sistemas.WINDOWS:
+        # Os jogos descompilados (receitas em bash) e o PortMaster só existem no Linux.
+        return [*sistemas.jogos(), *lojas.jogos()]
     base = jogos_do_catalogo if jogos_do_catalogo is not None else catalogo.carregar()
     return [*base, *sistemas.jogos(), *lojas.jogos(), *portmaster.jogos()]
 

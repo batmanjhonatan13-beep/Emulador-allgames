@@ -2,6 +2,7 @@
 
 import argparse
 import concurrent.futures
+import os
 import shutil
 import subprocess
 import sys
@@ -211,7 +212,7 @@ def cmd_preparar(jogos, args) -> int:
         portmaster.preparar_ambiente()
         print("PortMaster pronto")
     avisos = [] if args.sem_emuladores else sistemas.instalar([], dados, todos=True)
-    if args.lojas:
+    if args.lojas and not sistemas.WINDOWS:  # no Windows as lojas são os próprios programas delas
         for app, nome in (("com.heroicgameslauncher.hgl", "Heroic"),):
             try:
                 sistemas.instalar_flatpak(app)
@@ -426,6 +427,9 @@ def montar_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.platform == "win32":
+        # Os jogos e instalações que o AllGames abre (outros Pythons) também em UTF-8.
+        os.environ.setdefault("PYTHONUTF8", "1")
     args = montar_parser().parse_args(argv)
     try:
         jogos = catalogo.carregar()

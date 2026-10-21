@@ -4,6 +4,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from . import caminhos, supervisor
@@ -84,6 +85,10 @@ def jogar_comando(jogo: Jogo, argv: list[str], gamescope: bool = False, combo_sa
     os.write(log, f"\n$ {shlex.join(argv)}\n".encode())
     if combo_sair:
         return supervisor.rodar(argv, env=env, log=log)
+    if sys.platform == "win32":
+        # No Windows o exec cria outro processo e encerra este na hora: o portal acharia
+        # que o jogo já fechou. Então abre e espera.
+        return subprocess.call(argv, env=env, stdout=log, stderr=log)
     os.dup2(log, 1)
     os.dup2(log, 2)
     os.execvpe(argv[0], argv, env)

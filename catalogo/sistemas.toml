@@ -31,6 +31,9 @@
 #   combo_sair  true: segurar Select+Start fecha o emulador (o RetroArch já faz
 #               isso sozinho, salvando o estado)
 #   aviso       observação mostrada no portal e em `allgames emuladores`
+#   windows     como rodar no Windows: exe ("retroarch" = o RetroArch instalado pelo
+#               winget) e, para o AllGames baixar sozinho, releases (páginas de versões)
+#               e arquivos (nomes do zip para Windows, em ordem de preferência)
 #
 # Clique e joga: quase tudo roda no RetroArch, que já vem configurado para
 # salvar o estado ao sair (Select+Start, como no R36S) e voltar de onde parou
@@ -48,6 +51,7 @@ flatpak = "org.libretro.RetroArch"
 # salvando o estado; ao abrir de novo, o jogo continua de onde parou.
 comando = ["{emulador}", "-f", "-L", "{core}", "--appendconfig", "{retroarch_cfg}", "{rom}"]
 saves = ["{pasta_rom}/{nome}.srm", "{pasta_rom}/{nome}.state*", "{pasta_rom}/{nome}.sav"]
+windows = { exe = "retroarch" }
 
 # Os emuladores abaixo (melonDS, PPSSPP, PCSX2, Dolphin) são alternativas aos
 # cores do RetroArch. Para usar um deles, troque `emulador` no sistema.
@@ -86,12 +90,14 @@ flatpak = "org.azahar_emu.Azahar"
 combo_sair = true
 comando = ["{emulador}", "-f", "{rom}"]
 saves = ["~/.var/app/org.azahar_emu.Azahar/data/azahar-emu/sdmc/Nintendo 3DS/*/*/title/*/*/data/**/*"]
+windows = { exe = "azahar.exe", releases = ["https://api.github.com/repos/azahar-emu/azahar/releases/latest"], arquivos = ['(?i)windows.*msvc.*\.zip$', '(?i)windows.*\.zip$'] }
 
 [emulador.xemu]
 nome = "xemu"
 flatpak = "app.xemu.xemu"
 combo_sair = true
 comando = ["{emulador}", "-full-screen", "-dvd_path", "{rom}"]
+windows = { exe = "xemu.exe", releases = ["https://api.github.com/repos/xemu-project/xemu/releases/latest"], arquivos = ['(?i)xemu-win-x86_64-release\.zip$', '(?i)win.*x86_64.*\.zip$'] }
 aviso = "Coloque em ~/AllGames/roms/bios/xbox o boot ROM (mcpx_1.0.bin), a BIOS e o HD (xbox_hdd.qcow2) do seu Xbox: o AllGames configura o xemu sozinho. Os saves ficam dentro do HD virtual."
 
 [emulador.switch]
@@ -103,6 +109,7 @@ comando = ["{emulador}", "-f", "-g", "{rom}"]
 saves = ["~/.local/share/eden/nand/user/save/**/*"]
 # Se o nome do AppImage tiver uma destas palavras, usa o comando correspondente.
 alternativas = { ryujinx = ["{emulador}", "--fullscreen", "{rom}"], ryubing = ["{emulador}", "--fullscreen", "{rom}"] }
+windows = { exe = "eden.exe", releases = ["https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases/latest", "https://api.github.com/repos/eden-emulator/Releases/releases/latest"], arquivos = ['(?i)windows.*(amd64|x64).*\.zip$', '(?i)windows.*\.zip$'] }
 aviso = "Coloque em ~/AllGames/roms/bios/switch as chaves (prod.keys e title.keys) e a pasta firmware tiradas do SEU Switch: o AllGames instala no Eden sozinho. Na primeira vez, escolha o controle em Emulação → Configurar → Controles."
 
 [emulador.xenia]
@@ -110,6 +117,7 @@ nome = "Xenia Canary (Xbox 360, experimental no Linux)"
 appimage = "xenia"
 combo_sair = true
 comando = ["{emulador}", "--fullscreen", "{rom}"]
+windows = { exe = "xenia_canary.exe", releases = ["https://api.github.com/repos/xenia-canary/xenia-canary-releases/releases/latest"], arquivos = ['(?i)xenia_canary_windows_?\.zip$', '(?i)windows.*\.zip$'] }
 aviso = "A versão Linux do Xenia ainda é experimental: muitos jogos não abrem. Coloque o AppImage em ~/AllGames/emuladores/xenia/."
 
 # ------------------------------------------------------------------ Nintendo

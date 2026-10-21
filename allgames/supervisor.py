@@ -6,12 +6,14 @@ AllGames lê o controle direto do kernel (/dev/input/event*) e fecha o emulador
 com calma quando a combinação fica apertada por um instante.
 """
 
+import ctypes
 import glob
 import os
 import select
 import signal
 import struct
 import subprocess
+import sys
 import time
 
 EV_KEY = 1
@@ -79,6 +81,66 @@ class Controles:
             self._fechar(caminho)
 
 
+class _XInputGamepad(ctypes.Structure):
+    _fields_ = [
+        ("wButtons", ctypes.c_ushort),
+        ("bLeftTrigger", ctypes.c_ubyte),
+        ("bRightTrigger", ctypes.c_ubyte),
+        ("sThumbLX", ctypes.c_short),
+        ("sThumbLY", ctypes.c_short),
+        ("sThumbRX", ctypes.c_short),
+        ("sThumbRY", ctypes.c_short),
+    ]
+
+
+class _XInputState(ctypes.Structure):
+    _fields_ = [("dwPacketNumber", ctypes.c_uint), ("Gamepad", _XInputGamepad)]
+
+
+class ControlesXInput:
+    """O mesmo que Controles, no Windows: lê os controles XInput (o do Sunshine é um deles)."""
+
+    BACK = 0x0020
+    START = 0x0010
+
+    def __init__(self, dll=None):
+        self._dll = dll
+        if self._dll is None:
+            for nome in ("xinput1_4", "xinput1_3", "xinput9_1_0"):
+                try:
+                    self._dll = ctypes.WinDLL(nome)  # type: ignore[attr-defined]
+                    break
+                except (AttributeError, OSError):
+                    continue
+        self._apertado = False
+
+    def buscar(self) -> None:
+        pass
+
+    def ler(self, espera: float) -> None:
+        time.sleep(espera)
+        self._apertado = False
+        if not self._dll:
+            return
+        estado = _XInputState()
+        for indice in range(4):
+            if self._dll.XInputGetState(indice, ctypes.byref(estado)) == 0:
+                botoes = estado.Gamepad.wButtons
+                if botoes & self.BACK and botoes & self.START:
+                    self._apertado = True
+
+    def combo_apertado(self) -> bool:
+        return self._apertado
+
+    def fechar(self) -> None:
+        pass
+
+
+def novos_controles():
+    """Leitor de controles do sistema: /dev/input no Linux, XInput no Windows."""
+    return ControlesXInput() if sys.platform == "win32" else Controles()
+
+
 def encerrar(processo: subprocess.Popen, espera: float = 10) -> None:
     """Pede para fechar (SIGTERM) e, se não fechar a tempo, força."""
     if processo.poll() is not None:
@@ -97,10 +159,11 @@ def rodar(argv: list[str], env: dict | None = None, log=None, segurar: float = 1
     def repassar(sinal, _quadro):
         encerrar(processo)
 
-    for sinal in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
-        signal.signal(sinal, repassar)
+    for nome in ("SIGTERM", "SIGINT", "SIGHUP"):  # o Windows não tem SIGHUP
+        if hasattr(signal, nome):
+            signal.signal(getattr(signal, nome), repassar)
 
-    controles = controles or Controles()
+    controles = controles or novos_controles()
     controles.buscar()
     desde = None
     try:

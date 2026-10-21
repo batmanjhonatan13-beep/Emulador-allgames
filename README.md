@@ -66,6 +66,19 @@ Depois:
 
 Pastas, atualização e problemas: [docs/DOCKER.md](docs/DOCKER.md).
 
+## Instalação no Windows
+
+Para quem usa Windows 10 ou 11 (sem Docker: o Sunshine, o RetroArch e o AllGames rodam direto no
+Windows). Abra o **PowerShell** e cole:
+
+```powershell
+irm https://raw.githubusercontent.com/batmanjhonatan13-beep/Emulador-allgames/ccr-f2ccb85d-qka26y/scripts/instalar-windows.ps1 | iex
+```
+
+O script pede permissão de administrador, instala tudo pelo winget, pergunta se você quer copiar os
+seus jogos de uma pasta e cria o usuário do Sunshine. No Windows o celular mostra a própria tela do
+PC. O passo a passo para quem nunca usou está no [guia em PDF](docs/AllGames-Guia.pdf).
+
 ## Instalação sem Docker
 
 ```bash

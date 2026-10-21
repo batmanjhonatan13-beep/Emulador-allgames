@@ -19,7 +19,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import caminhos, capas, downloads, lojas, portmaster, saves, supervisor
+from . import caminhos, capas, downloads, lojas, portmaster, saves, supervisor, windows
 from .catalogo import Jogo, verificar
 
 # Cada sessão do AllGames no mesmo PC (Docker com rede do host) usa uma porta: ALLGAMES_PORTA.
@@ -329,6 +329,18 @@ def comando_navegador(url: str) -> list[str] | None:
     """Navegador em tela cheia, com um perfil só do portal."""
     perfil = caminhos.base() / "portal" / "navegador"
     perfil.mkdir(parents=True, exist_ok=True)
+    edge = windows.edge() if windows.ATIVO and not os.environ.get("ALLGAMES_NAVEGADOR") else None
+    if edge:
+        # Perfil próprio: o Edge abre uma janela nova (e espera nela) em vez de passar para o já aberto.
+        return [
+            str(edge),
+            f"--user-data-dir={perfil}",
+            "--kiosk",
+            url,
+            "--edge-kiosk-type=fullscreen",
+            "--no-first-run",
+            "--autoplay-policy=no-user-gesture-required",
+        ]
     escolhido = os.environ.get("ALLGAMES_NAVEGADOR")
     candidatos = [escolhido] if escolhido else NAVEGADORES
     for nome in candidatos:
@@ -373,7 +385,7 @@ def voltar_ao_portal(partida: Partida, controles=None, segurar: float = 1.0, par
     Dentro dos jogos do AllGames quem sai com essa combinação é o emulador (ou o supervisor).
     Se a combinação começou com um jogo aberto, ela foi para o jogo: só vale de novo depois de soltar.
     """
-    controles = controles or supervisor.Controles()
+    controles = controles or supervisor.novos_controles()
     desde = None
     do_jogo = False
     while not (parar and parar.is_set()):

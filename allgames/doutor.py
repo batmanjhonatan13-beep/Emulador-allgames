@@ -1,14 +1,13 @@
 """`allgames doutor`: confere se o PC está pronto para transmitir jogos ao celular."""
 
-import grp
 import os
-import pwd
+import platform
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from . import caminhos, downloads, portal, portmaster, sunshine
+from . import caminhos, downloads, portal, portmaster, sistemas, sunshine, windows
 
 
 def _rodar(*cmd: str) -> str:
@@ -19,6 +18,8 @@ def _rodar(*cmd: str) -> str:
 
 
 def _sistema() -> tuple[bool, str, str]:
+    if windows.ATIVO:
+        return True, platform.platform(), ""
     info = {}
     if Path("/etc/os-release").exists():
         for linha in Path("/etc/os-release").read_text().splitlines():
@@ -88,6 +89,9 @@ def _entrada() -> tuple[bool, str, str]:
         return True, "/dev/uinput liberado (controle virtual funciona)", ""
     if caminhos.no_docker():
         return False, "sem acesso a /dev/uinput", "o docker-compose precisa passar /dev/uinput (veja docs/DOCKER.md)"
+    import grp
+    import pwd
+
     usuario = pwd.getpwuid(os.getuid()).pw_name
     try:
         no_grupo = usuario in grp.getgrnam("input").gr_mem
@@ -144,6 +148,44 @@ def _epic() -> tuple[bool, str, str]:
     return True, f"downloads da Epic pelo portal (jogos em {downloads.pasta_epic()})", ""
 
 
+def _sunshine_windows() -> tuple[bool, str, str]:
+    if not (windows.sunshine_config().parent / "sunshine.exe").exists():
+        return False, "Sunshine não instalado", "rode o scripts\\instalar-windows.ps1"
+    if not windows.sunshine_ativo():
+        return False, "Sunshine instalado, mas parado", "reinicie o PC ou inicie o SunshineService em Serviços"
+    return True, "Sunshine ligado — painel em https://localhost:47990", ""
+
+
+def _retroarch_windows() -> tuple[bool, str, str]:
+    exe = windows.retroarch()
+    if not exe:
+        return False, "RetroArch não encontrado", "rode o scripts\\instalar-windows.ps1"
+    return True, f"RetroArch em {exe}", ""
+
+
+def _portal_windows() -> tuple[bool, str, str]:
+    if not windows.edge():
+        return False, "Microsoft Edge não encontrado", "instale o Edge (a tela de capas abre nele)"
+    return True, "tela de capas abre no Edge (app AllGames no Moonlight)", ""
+
+
+def _roms() -> tuple[bool, str, str]:
+    quantidade = len(sistemas.jogos())
+    pasta = sistemas.roms_dir()
+    if not quantidade:
+        return False, f"nenhuma ROM em {pasta}", "copie os seus jogos para a pasta do console"
+    return True, f"{quantidade} jogos em {pasta}", ""
+
+
+VERIFICACOES_WINDOWS = [
+    ("Sistema", _sistema),
+    ("Python", _python),
+    ("Sunshine", _sunshine_windows),
+    ("Emuladores", _retroarch_windows),
+    ("Portal", _portal_windows),
+    ("Jogos", _roms),
+]
+
 VERIFICACOES = [
     ("Sistema", _sistema),
     ("Python", _python),
@@ -161,7 +203,7 @@ VERIFICACOES = [
 
 def executar() -> int:
     problemas = 0
-    for titulo, verificacao in VERIFICACOES:
+    for titulo, verificacao in VERIFICACOES_WINDOWS if windows.ATIVO else VERIFICACOES:
         ok, texto, dica = verificacao()
         print(f"{'✔' if ok else '✘'} {titulo:<14} {texto}")
         if dica:
