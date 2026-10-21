@@ -201,6 +201,15 @@ class Pastas(unittest.TestCase):
         config.write_text(texto + '\n[input.bindings]\nport1 = "pad"\n')
         self.assertIn('port1 = "pad"', sistemas.configurar_xemu().read_text())
 
+    def test_pastas_da_bios_com_leia_me(self):
+        sistemas.preparar_pastas(self.dados)
+        bios = self.roms / "bios"
+        for sub in ("switch", "switch/firmware", "xbox", "pcsx2/bios"):
+            self.assertTrue((bios / sub / "LEIA-ME.txt").exists(), sub)
+        (bios / "switch/LEIA-ME.txt").write_text("meu texto")
+        sistemas.preparar_pastas(self.dados)
+        self.assertEqual((bios / "switch/LEIA-ME.txt").read_text(), "meu texto")
+
     def test_preparar_pastas(self):
         self._rom("megadrive/Jogo.md")
         sistemas.preparar_pastas(self.dados)

@@ -723,6 +723,18 @@ def instalar(alvos: list[str], dados=None, todos: bool = False) -> list[str]:
     return list(dict.fromkeys(avisos))
 
 
+# Pastas da BIOS que precisam de um lugar certo (o resto fica direto em bios/).
+PASTAS_DE_BIOS = {
+    "switch": "Chaves do SEU Switch: prod.keys e title.keys (aqui nesta pasta).\n"
+    "Firmware do SEU Switch: os arquivos .nca dentro da pasta firmware.\n"
+    "O AllGames copia tudo para o Eden antes de cada partida.",
+    "switch/firmware": "Os arquivos .nca do firmware do SEU Switch.",
+    "xbox": "Do SEU Xbox: mcpx_1.0.bin (boot ROM), a BIOS e o HD (xbox_hdd.qcow2).\n"
+    "O AllGames configura o xemu sozinho.",
+    "pcsx2/bios": "A BIOS do SEU PlayStation 2 (ex.: SCPH-70012.bin).",
+}
+
+
 def preparar_pastas(dados=None) -> list[Path]:
     """Cria a estrutura de pastas do ArkOS com um LEIA-ME em cada uma."""
     emuladores, sistemas = dados or carregar()
@@ -745,6 +757,11 @@ def preparar_pastas(dados=None) -> list[Path]:
             linhas.append(emulador.aviso)
         (pasta / "LEIA-ME.txt").write_text("\n".join(linhas) + "\n")
     bios_dir().mkdir(parents=True, exist_ok=True)
+    for sub, texto in PASTAS_DE_BIOS.items():
+        pasta = bios_dir() / sub
+        pasta.mkdir(parents=True, exist_ok=True)
+        if not (pasta / "LEIA-ME.txt").exists():
+            (pasta / "LEIA-ME.txt").write_text(texto + "\n")
     for emulador in emuladores.values():
         if emulador.appimage:
             (emuladores_dir() / emulador.appimage).mkdir(parents=True, exist_ok=True)
