@@ -668,6 +668,103 @@ main {
 
 /* ------------------------------------------------------------ camadas */
 
+/* Teclado na tela, para buscar com o controle */
+.painel-teclado {
+  width: min(52rem, 100%);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teclado-visor {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+  padding: 0.8rem 1rem;
+  border: 2px solid var(--destaque);
+  border-radius: 0.7rem;
+  background: rgb(0 0 0 / 25%);
+}
+
+#teclado-texto {
+  min-height: 1.6em;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: pre;
+}
+
+#teclado-texto::after {
+  content: "";
+  display: inline-block;
+  width: 0.12em;
+  height: 1.1em;
+  margin-left: 0.08em;
+  vertical-align: -0.15em;
+  background: var(--destaque);
+  animation: piscar 1s steps(1) infinite;
+}
+
+@keyframes piscar {
+  50% {
+    opacity: 0;
+  }
+}
+
+#teclado-resultado {
+  color: var(--texto-2);
+  white-space: nowrap;
+}
+
+.teclado-linha {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.teclado-tecla {
+  flex: 0 0 3.6rem;
+  height: 3.4rem;
+  border: 1px solid var(--borda);
+  border-radius: 0.6rem;
+  background: rgb(255 255 255 / 8%);
+  color: var(--texto);
+  font-size: 1.25rem;
+  font-weight: 700;
+  transition: transform 0.08s, background 0.08s;
+}
+
+.teclado-tecla.larga {
+  flex-basis: 8rem;
+  font-size: 1rem;
+}
+
+.teclado-tecla.espaco {
+  flex-basis: 20rem;
+  font-size: 1rem;
+}
+
+.teclado-tecla.pronto {
+  border-color: rgb(61 220 132 / 50%);
+  color: var(--destaque);
+}
+
+.teclado-tecla.foco,
+.teclado-tecla:hover {
+  background: var(--destaque);
+  border-color: var(--destaque);
+  color: #06140c;
+  transform: scale(1.08);
+}
+
+.teclado-dica {
+  margin: 0.6rem 0 0;
+  color: var(--texto-2);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .camada {
   position: fixed;
   inset: 0;

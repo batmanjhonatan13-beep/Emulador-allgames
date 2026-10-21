@@ -591,16 +591,77 @@ function mover(direcao) {
   else if (direcao === "cima" && !camadaAberta()) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// ---------------------------------------------------------------- teclado na tela
+// Buscar com o controle: A na caixa de busca abre um teclado que se usa com o direcional.
+
+const LINHAS_DO_TECLADO = ["1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM-:"];
+
+function teclaAberto() {
+  return camadaAberta()?.id === "teclado";
+}
+
+function digitar(texto) {
+  estado.busca = texto;
+  estado.limiteGrade = 0;
+  $("#busca").value = texto;
+  renderizarBiblioteca();
+  $("#teclado-texto").textContent = texto;
+  const total = estado.jogos.length ? $("#grade").querySelectorAll("[data-id]").length : 0;
+  const mais = $("#grade").lastElementChild?.classList.contains("cartao-mais");
+  $("#teclado-resultado").textContent = texto ? `${total}${mais ? "+" : ""} jogos` : "Digite o nome do jogo";
+}
+
+function fecharTeclado() {
+  $("#teclado").hidden = true;
+  focar($("#grade [data-id]") || $("#busca"));
+}
+
+function abrirTeclado() {
+  const tecla = (rotulo, aoApertar, classe = "") =>
+    el("button", { class: `teclado-tecla ${classe}`.trim(), "data-nav": true, onclick: aoApertar }, rotulo);
+  const linhas = LINHAS_DO_TECLADO.map((linha) =>
+    el("div", { class: "teclado-linha" }, ...[...linha].map((letra) => tecla(letra, () => digitar(estado.busca + letra)))),
+  );
+  linhas[1].firstChild.dataset.autofoco = "";
+  linhas[2].append(tecla("Apagar", () => digitar(estado.busca.slice(0, -1)), "larga"));
+  linhas.push(
+    el(
+      "div",
+      { class: "teclado-linha" },
+      tecla("Espaço", () => digitar(`${estado.busca} `), "espaco"),
+      tecla("Limpar", () => digitar(""), "larga"),
+      tecla("Pronto", fecharTeclado, "larga pronto"),
+    ),
+  );
+  abrirCamada(
+    "teclado",
+    el(
+      "div",
+      { class: "painel painel-teclado" },
+      el("div", { class: "teclado-visor" }, el("span", { id: "teclado-texto" }), el("span", { id: "teclado-resultado" })),
+      ...linhas,
+      el("p", { class: "teclado-dica" }, "A digita · X apaga · Y espaço · Start pronto · B fecha"),
+    ),
+  );
+  digitar(estado.busca);
+}
+
 function acao(nome) {
   if (estado.jogando) return;
-  if (nome === "a") estado.focado?.click();
+  if (teclaAberto()) {
+    if (nome === "x") return digitar(estado.busca.slice(0, -1));
+    if (nome === "y") return digitar(`${estado.busca} `);
+    if (nome === "start") return fecharTeclado();
+  }
+  if (nome === "a" && estado.focado?.id === "busca") abrirTeclado();
+  else if (nome === "a") estado.focado?.click();
   else if (nome === "b") camadaAberta() ? fecharCamada() : estado.aba !== "inicio" && trocarAba("inicio");
   else if (nome === "lb" || nome === "rb") {
     const abas = ["inicio", "recentes", "instalados", "biblioteca", "downloads"];
     const i = abas.indexOf(estado.aba) + (nome === "rb" ? 1 : -1);
     trocarAba(abas[(i + abas.length) % abas.length]);
   }
-  else mover(nome);
+  else if (["cima", "baixo", "esquerda", "direita"].includes(nome)) mover(nome);
 }
 
 document.addEventListener("keydown", (evento) => {
@@ -655,6 +716,9 @@ function lerControles(agora) {
       b: b(1),
       lb: b(4),
       rb: b(5),
+      x: b(2),
+      y: b(3),
+      start: b(9),
     };
     for (const [nome, apertado] of Object.entries(leitura)) {
       const anterior = botoesAnteriores[nome] || { apertado: false, proximo: 0 };
@@ -786,7 +850,7 @@ $("#busca").addEventListener("input", (evento) => {
   estado.limiteGrade = 0;
   renderizarBiblioteca();
 });
-// Com o controle, "A" na busca abre o teclado (o do Moonlight, no celular).
+// Mouse ou toque na busca: digita pelo teclado de verdade. O controle abre o teclado na tela (acao "a").
 $("#busca").addEventListener("click", (evento) => evento.target.focus());
 
 // A Steam abre em tela cheia (Big Picture), como no botão Guide do controle.
